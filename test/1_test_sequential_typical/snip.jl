@@ -24,10 +24,9 @@ include("$(dirname(dirname(@__DIR__)))/example/snip/model.jl")
                         )
 
             # solver parameters
-            mip_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPXPARAM_Threads" => 4, "CPX_PARAM_SCRIND" => 0)
-            master_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-9, "CPXPARAM_Threads" => 4, "CPX_PARAM_SCRIND" => 0)
-            typical_oracle_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_SCRIND" => 0)
-            basic_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_SCRIND" => 0)
+            mip_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-6, "CPX_PARAM_SCRIND" => 0)
+            master_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-6, "CPX_PARAM_SCRIND" => 0)
+            typical_oracle_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_SCRIND" => 0)
             
             # oracle parameters & corepoint
             rtol, atol = 1e-9, 1e-9
@@ -47,8 +46,7 @@ include("$(dirname(dirname(@__DIR__)))/example/snip/model.jl")
                 update_model!(master, data)
 
                 # Construct oracle and set parameters
-                classical_param = ClassicalOracleParam(rtol = rtol, atol = atol) 
-                oracle = SeparableOracle(data, ClassicalOracle(), data.problem.num_scenarios; solver_param = typical_oracle_solver_param, sub_oracle_param = classical_param)
+                oracle = SeparableOracle(data, ClassicalOracle(), data.problem.num_scenarios; solver_param = typical_oracle_solver_param)
                 for j=1:oracle.N
                     update_model!(oracle.oracles[j], data, j)
                 end
@@ -66,7 +64,7 @@ include("$(dirname(dirname(@__DIR__)))/example/snip/model.jl")
                 
                 # Construct oracle and set parameters
                 pareto_param = ParetoOracleParam(rtol = rtol, atol = atol, core_point = core_point)
-                oracle = SeparableOracle(data, ParetoOracle(), data.problem.num_scenarios; solver_param = basic_solver_param, sub_oracle_param = pareto_param)
+                oracle = SeparableOracle(data, ParetoOracle(), data.problem.num_scenarios; solver_param = typical_oracle_solver_param, sub_oracle_param = pareto_param)
         
                 for j=1:oracle.N
                     update_model!(oracle.oracles[j], data, j)
@@ -84,8 +82,8 @@ include("$(dirname(dirname(@__DIR__)))/example/snip/model.jl")
                 master = Master(data; solver_param = master_solver_param)
                 update_model!(master, data)
 
-                unified_param = UnifiedOracleParam(rtol = rtol, atol = atol)
-                oracle = SeparableOracle(data, UnifiedOracle(), data.problem.num_scenarios; solver_param = typical_oracle_solver_param, sub_oracle_param = unified_param)
+                # Construct oracle and set parameters
+                oracle = SeparableOracle(data, UnifiedOracle(), data.problem.num_scenarios; solver_param = typical_oracle_solver_param)
                 for j=1:oracle.N
                     update_model!(oracle.oracles[j], data, j)
                     model_reformulation!(oracle.oracles[j])

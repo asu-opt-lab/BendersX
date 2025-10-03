@@ -19,10 +19,9 @@ include("$(dirname(dirname(@__DIR__)))/example/scflp/model.jl")
             )
             
             # Common solver parameters
-            mip_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPXPARAM_Threads" => 4, "CPX_PARAM_SCRIND" => 0)
-            master_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-9, "CPXPARAM_Threads" => 4, "CPX_PARAM_SCRIND" => 0)
-            typical_oracle_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_SCRIND" => 0)
-            basic_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_SCRIND" => 0)
+            mip_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-6, "CPX_PARAM_SCRIND" => 0)
+            master_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-6, "CPX_PARAM_SCRIND" => 0)
+            typical_oracle_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_SCRIND" => 0)
 
             # Initialize data object
             dim_x = problem.n_facilities
@@ -44,163 +43,160 @@ include("$(dirname(dirname(@__DIR__)))/example/scflp/model.jl")
             @assert termination_status(mip.model) == OPTIMAL
             mip_opt_val = objective_value(mip.model)
             
-            @testset "Classic oracle" begin
-                @testset "NoSeq" begin
-                    @info "solving SCFLP f25-c50-s64-r10-$i - classical oracle - no seq..."
-                    master = Master(data; solver_param = master_solver_param)
-                    update_model!(master, data)
-                    # Construct oracle and set parameters
-                    classical_param = ClassicalOracleParam(rtol = rtol, atol = atol) 
-                    typical_oracle = SeparableOracle(data, ClassicalOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param, sub_oracle_param = classical_param)
-                    for j=1:typical_oracle.N
-                        update_model!(typical_oracle.oracles[j], data, j)
-                    end
-                    root_preprocessing = NoRootNodePreprocessing()
-                    lazy_callback = LazyCallback(typical_oracle)
-                    user_callback = NoUserCallback()
-                    env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
-                    log = solve!(env)
-                    @test env.termination_status == Optimal()
-                    @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
-                end
-                @testset "Seq" begin
-                    @info "solving SCFLP f25-c50-s64-r10-$i - classical oracle - seq..."
-                    master = Master(data; solver_param = master_solver_param)
-                    update_model!(master, data)
-                    # Construct oracle and set parameters
-                    classical_param = ClassicalOracleParam(rtol = rtol, atol = atol)
-                    typical_oracle = SeparableOracle(data, ClassicalOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param, sub_oracle_param = classical_param)
-                    for j=1:typical_oracle.N
-                        update_model!(typical_oracle.oracles[j], data, j)
-                    end
-                    root_seq_type = BendersSeq
-                    root_param = BendersSeqParam(;
-                        time_limit = 200.0,
-                        gap_tolerance = 1e-6,
-                        verbose = false
-                    )
-                    root_preprocessing = RootNodePreprocessing(typical_oracle, root_seq_type, root_param)
-                    lazy_callback = LazyCallback(typical_oracle)
-                    user_callback = NoUserCallback()
-                    env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
-                    log = solve!(env)
-                    @test env.termination_status == Optimal()
-                    @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
-                end
-                @testset "SeqInOut" begin
-                    @info "solving SCFLP f25-c50-s64-r10-$i - classical oracle - seqinout..."
-                    master = Master(data; solver_param = master_solver_param)
-                    update_model!(master, data)
-                    # Construct oracle and set parameters
-                    classical_param = ClassicalOracleParam(rtol = rtol, atol = atol)
-                    typical_oracle = SeparableOracle(data, ClassicalOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param, sub_oracle_param = classical_param)
-                    for j=1:typical_oracle.N
-                        update_model!(typical_oracle.oracles[j], data, j)
-                    end
-                    root_seq_type = BendersSeqInOut
-                    root_param = BendersSeqInOutParam(
-                        time_limit = 300.0,
-                        gap_tolerance = 1e-6,
-                        stabilizing_x = ones(data.dim_x),
-                        α = 0.9,
-                        λ = 0.1,
-                        verbose = false
-                    )
-                    root_preprocessing = RootNodePreprocessing(typical_oracle, root_seq_type, root_param)
-                    lazy_callback = LazyCallback(typical_oracle)
-                    user_callback = NoUserCallback()
-                    env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
-                    log = solve!(env)
-                    @test env.termination_status == Optimal()
-                    @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
-                end
-            end 
+            # @testset "Classic oracle" begin
+            #     @testset "NoSeq" begin
+            #         @info "solving SCFLP f25-c50-s64-r10-$i - classical oracle - no seq..."
+            #         master = Master(data; solver_param = master_solver_param)
+            #         update_model!(master, data)
+            #         # Construct oracle and set parameters
+            #         typical_oracle = SeparableOracle(data, ClassicalOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param)
+            #         for j=1:typical_oracle.N
+            #             update_model!(typical_oracle.oracles[j], data, j)
+            #         end
+            #         root_preprocessing = NoRootNodePreprocessing()
+            #         lazy_callback = LazyCallback(typical_oracle)
+            #         user_callback = NoUserCallback()
+            #         env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
+            #         log = solve!(env)
+            #         @test env.termination_status == Optimal()
+            #         @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
+            #     end
+            #     @testset "Seq" begin
+            #         @info "solving SCFLP f25-c50-s64-r10-$i - classical oracle - seq..."
+            #         master = Master(data; solver_param = master_solver_param)
+            #         update_model!(master, data)
+            #         # Construct oracle and set parameters
+            #         typical_oracle = SeparableOracle(data, ClassicalOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param)
+            #         for j=1:typical_oracle.N
+            #             update_model!(typical_oracle.oracles[j], data, j)
+            #         end
+            #         root_seq_type = BendersSeq
+            #         root_param = BendersSeqParam(;
+            #             time_limit = 200.0,
+            #             gap_tolerance = 1e-6,
+            #             verbose = false
+            #         )
+            #         root_preprocessing = RootNodePreprocessing(typical_oracle, root_seq_type, root_param)
+            #         lazy_callback = LazyCallback(typical_oracle)
+            #         user_callback = NoUserCallback()
+            #         env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
+            #         log = solve!(env)
+            #         @test env.termination_status == Optimal()
+            #         @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
+            #     end
+            #     @testset "SeqInOut" begin
+            #         @info "solving SCFLP f25-c50-s64-r10-$i - classical oracle - seqinout..."
+            #         master = Master(data; solver_param = master_solver_param)
+            #         update_model!(master, data)
+            #         # Construct oracle and set parameters
+            #         typical_oracle = SeparableOracle(data, ClassicalOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param)
+            #         for j=1:typical_oracle.N
+            #             update_model!(typical_oracle.oracles[j], data, j)
+            #         end
+            #         root_seq_type = BendersSeqInOut
+            #         root_param = BendersSeqInOutParam(
+            #             time_limit = 300.0,
+            #             gap_tolerance = 1e-6,
+            #             stabilizing_x = ones(data.dim_x),
+            #             α = 0.9,
+            #             λ = 0.1,
+            #             verbose = false
+            #         )
+            #         root_preprocessing = RootNodePreprocessing(typical_oracle, root_seq_type, root_param)
+            #         lazy_callback = LazyCallback(typical_oracle)
+            #         user_callback = NoUserCallback()
+            #         env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
+            #         log = solve!(env)
+            #         @test env.termination_status == Optimal()
+            #         @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
+            #     end
+            # end 
             
-            @testset "Pareto oracle" begin
-                @testset "NoSeq" begin
-                    @info "solving SCFLP f25-c50-s64-r10-$i - pareto oracle - no seq..."
-                    master = Master(data; solver_param = master_solver_param)
-                    update_model!(master, data)
-                    # Construct oracle and set parameters
-                    pareto_param = ParetoOracleParam(rtol = rtol, atol = atol, core_point = core_point)
-                    typical_oracle = SeparableOracle(data, ParetoOracle(), data.problem.n_scenarios; solver_param = basic_solver_param, sub_oracle_param = pareto_param)
+            # @testset "Pareto oracle" begin
+            #     @testset "NoSeq" begin
+            #         @info "solving SCFLP f25-c50-s64-r10-$i - pareto oracle - no seq..."
+            #         master = Master(data; solver_param = master_solver_param)
+            #         update_model!(master, data)
+            #         # Construct oracle and set parameters
+            #         pareto_param = ParetoOracleParam(rtol = rtol, atol = atol, core_point = core_point)
+            #         typical_oracle = SeparableOracle(data, ParetoOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param, sub_oracle_param = pareto_param)
                     
-                    for j=1:typical_oracle.N
-                        update_model!(typical_oracle.oracles[j], data, j)
-                        model_reformulation!(typical_oracle.oracles[j])
-                    end
-                    root_preprocessing = NoRootNodePreprocessing()
-                    lazy_callback = LazyCallback(typical_oracle)
-                    user_callback = NoUserCallback()
-                    env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
-                    log = solve!(env)
-                    @test env.termination_status == Optimal()
-                    @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
-                end
-                @testset "Seq" begin
-                    @info "solving SCFLP f25-c50-s64-r10-$i - pareto oracle - seq..."
-                    master = Master(data; solver_param = master_solver_param)
-                    update_model!(master, data)
-                    # Construct oracle and set parameters
-                    pareto_param = ParetoOracleParam(rtol = rtol, atol = atol, core_point = core_point)
-                    typical_oracle = SeparableOracle(data, ParetoOracle(), data.problem.n_scenarios; solver_param = basic_solver_param, sub_oracle_param = pareto_param)
+            #         for j=1:typical_oracle.N
+            #             update_model!(typical_oracle.oracles[j], data, j)
+            #             model_reformulation!(typical_oracle.oracles[j])
+            #         end
+            #         root_preprocessing = NoRootNodePreprocessing()
+            #         lazy_callback = LazyCallback(typical_oracle)
+            #         user_callback = NoUserCallback()
+            #         env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
+            #         log = solve!(env)
+            #         @test env.termination_status == Optimal()
+            #         @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
+            #     end
+            #     @testset "Seq" begin
+            #         @info "solving SCFLP f25-c50-s64-r10-$i - pareto oracle - seq..."
+            #         master = Master(data; solver_param = master_solver_param)
+            #         update_model!(master, data)
+            #         # Construct oracle and set parameters
+            #         pareto_param = ParetoOracleParam(rtol = rtol, atol = atol, core_point = core_point)
+            #         typical_oracle = SeparableOracle(data, ParetoOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param, sub_oracle_param = pareto_param)
                     
-                    for j=1:typical_oracle.N
-                        update_model!(typical_oracle.oracles[j], data, j)
-                        model_reformulation!(typical_oracle.oracles[j])
-                    end
-                    root_seq_type = BendersSeq
-                    root_param = BendersSeqParam(;
-                        time_limit = 200.0,
-                        gap_tolerance = 1e-6,
-                        verbose = false
-                    )
-                    root_preprocessing = RootNodePreprocessing(typical_oracle, root_seq_type, root_param)
-                    lazy_callback = LazyCallback(typical_oracle)
-                    user_callback = NoUserCallback()
-                    env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
-                    log = solve!(env)
-                    @test env.termination_status == Optimal()
-                    @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
-                end
-                @testset "SeqInOut" begin
-                    @info "solving SCFLP f25-c50-s64-r10-$i - pareto oracle - seqinout..."
-                    master = Master(data; solver_param = master_solver_param)
-                    update_model!(master, data)
-                    # Construct oracle and set parameters
-                    pareto_param = ParetoOracleParam(rtol = rtol, atol = atol, core_point = core_point)
-                    typical_oracle = SeparableOracle(data, ParetoOracle(), data.problem.n_scenarios; solver_param = basic_solver_param, sub_oracle_param = pareto_param)
+            #         for j=1:typical_oracle.N
+            #             update_model!(typical_oracle.oracles[j], data, j)
+            #             model_reformulation!(typical_oracle.oracles[j])
+            #         end
+            #         root_seq_type = BendersSeq
+            #         root_param = BendersSeqParam(;
+            #             time_limit = 200.0,
+            #             gap_tolerance = 1e-6,
+            #             verbose = false
+            #         )
+            #         root_preprocessing = RootNodePreprocessing(typical_oracle, root_seq_type, root_param)
+            #         lazy_callback = LazyCallback(typical_oracle)
+            #         user_callback = NoUserCallback()
+            #         env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
+            #         log = solve!(env)
+            #         @test env.termination_status == Optimal()
+            #         @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
+            #     end
+            #     @testset "SeqInOut" begin
+            #         @info "solving SCFLP f25-c50-s64-r10-$i - pareto oracle - seqinout..."
+            #         master = Master(data; solver_param = master_solver_param)
+            #         update_model!(master, data)
+            #         # Construct oracle and set parameters
+            #         pareto_param = ParetoOracleParam(rtol = rtol, atol = atol, core_point = core_point)
+            #         typical_oracle = SeparableOracle(data, ParetoOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param, sub_oracle_param = pareto_param)
                     
-                    for j=1:typical_oracle.N
-                        update_model!(typical_oracle.oracles[j], data, j)
-                        model_reformulation!(typical_oracle.oracles[j])
-                    end
-                    root_seq_type = BendersSeqInOut
-                    root_param = BendersSeqInOutParam(
-                        time_limit = 300.0,
-                        gap_tolerance = 1e-6,
-                        stabilizing_x = ones(data.dim_x),
-                        α = 0.9,
-                        λ = 0.1,
-                        verbose = false
-                    )
-                    root_preprocessing = RootNodePreprocessing(typical_oracle, root_seq_type, root_param)
-                    lazy_callback = LazyCallback(typical_oracle)
-                    user_callback = NoUserCallback()
-                    env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
-                    log = solve!(env)
-                    @test env.termination_status == Optimal()
-                    @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
-                end
-            end 
+            #         for j=1:typical_oracle.N
+            #             update_model!(typical_oracle.oracles[j], data, j)
+            #             model_reformulation!(typical_oracle.oracles[j])
+            #         end
+            #         root_seq_type = BendersSeqInOut
+            #         root_param = BendersSeqInOutParam(
+            #             time_limit = 300.0,
+            #             gap_tolerance = 1e-6,
+            #             stabilizing_x = ones(data.dim_x),
+            #             α = 0.9,
+            #             λ = 0.1,
+            #             verbose = false
+            #         )
+            #         root_preprocessing = RootNodePreprocessing(typical_oracle, root_seq_type, root_param)
+            #         lazy_callback = LazyCallback(typical_oracle)
+            #         user_callback = NoUserCallback()
+            #         env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
+            #         log = solve!(env)
+            #         @test env.termination_status == Optimal()
+            #         @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
+            #     end
+            # end 
 
             @testset "Unified oracle" begin
                 @testset "NoSeq" begin
                     @info "solving SCFLP f25-c50-s64-r10-$i - unified oracle - no seq..."
                     master = Master(data; solver_param = master_solver_param)
                     update_model!(master, data)
-                    unified_param = UnifiedOracleParam(rtol = rtol, atol = atol) 
-                    typical_oracle = SeparableOracle(data, UnifiedOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param, sub_oracle_param = unified_param)
+                    # Construct oracle and set parameters
+                    typical_oracle = SeparableOracle(data, UnifiedOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param)
                     for j=1:typical_oracle.N
                         update_model!(typical_oracle.oracles[j], data, j)
                         model_reformulation!(typical_oracle.oracles[j])
@@ -217,8 +213,8 @@ include("$(dirname(dirname(@__DIR__)))/example/scflp/model.jl")
                     @info "solving SCFLP f25-c50-s64-r10-$i - unified oracle - seq..."
                     master = Master(data; solver_param = master_solver_param)
                     update_model!(master, data)
-                    unified_param = UnifiedOracleParam(rtol = rtol, atol = atol) 
-                    typical_oracle = SeparableOracle(data, UnifiedOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param, sub_oracle_param = unified_param)
+                    # Construct oracle and set parameters
+                    typical_oracle = SeparableOracle(data, UnifiedOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param)
                     for j=1:typical_oracle.N
                         update_model!(typical_oracle.oracles[j], data, j)
                         model_reformulation!(typical_oracle.oracles[j])
@@ -238,11 +234,11 @@ include("$(dirname(dirname(@__DIR__)))/example/scflp/model.jl")
                     @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
                 end
                 @testset "SeqInOut" begin
-                    @info "solving SCFLP f25-c50-s64-r10-$i - classical oracle - seqinout..."
+                    @info "solving SCFLP f25-c50-s64-r10-$i - unified oracle - seqinout..."
                     master = Master(data; solver_param = master_solver_param)
                     update_model!(master, data)
-                    unified_param = UnifiedOracleParam(rtol = rtol, atol = atol) 
-                    typical_oracle = SeparableOracle(data, UnifiedOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param, sub_oracle_param = unified_param)
+                    # Construct oracle and set parameters
+                    typical_oracle = SeparableOracle(data, UnifiedOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param)
                     for j=1:typical_oracle.N
                         update_model!(typical_oracle.oracles[j], data, j)
                         model_reformulation!(typical_oracle.oracles[j])

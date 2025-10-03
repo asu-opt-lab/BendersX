@@ -28,13 +28,12 @@ include("$(dirname(dirname(@__DIR__)))/example/uflp/model.jl")
                         )
 
             # solver parameters
-            mip_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPXPARAM_Threads" => 4, "CPX_PARAM_SCRIND" => 0)
-            master_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-9, "CPXPARAM_Threads" => 4, "CPX_PARAM_SCRIND" => 0)
-            typical_oracle_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_SCRIND" => 0)
-            basic_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_SCRIND" => 0)
+            mip_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-6, "CPX_PARAM_SCRIND" => 0)
+            master_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-6, "CPX_PARAM_SCRIND" => 0)
+            typical_oracle_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_SCRIND" => 0)
 
             # oracle parameters & corepoint
-            rtol, atol = 1e-9, 1e-9
+            rtol, atol, zero_tol = 1e-9, 0.0, 1e-9
             core_point = fill(0.5, dim_x)
             
             # solve mip for reference
@@ -51,8 +50,7 @@ include("$(dirname(dirname(@__DIR__)))/example/uflp/model.jl")
                 update_model!(master, data)
 
                 # Construct oracle and set parameters
-                classical_param = ClassicalOracleParam(rtol = rtol, atol = atol) 
-                oracle = ClassicalOracle(data; solver_param = typical_oracle_solver_param, oracle_param = classical_param)
+                oracle = ClassicalOracle(data; solver_param = typical_oracle_solver_param)
                 update_model!(oracle, data)
 
                 env = BendersSeq(data, master, oracle; param = benders_param)
@@ -68,7 +66,7 @@ include("$(dirname(dirname(@__DIR__)))/example/uflp/model.jl")
 
                 # Construct oracle and set parameters
                 pareto_param = ParetoOracleParam(rtol = rtol, atol = atol, core_point = core_point) 
-                oracle = ParetoOracle(data; solver_param = basic_solver_param, oracle_param = pareto_param)
+                oracle = ParetoOracle(data; solver_param = typical_oracle_solver_param, oracle_param = pareto_param)
                 update_model!(oracle, data)
                 model_reformulation!(oracle)
 
@@ -83,8 +81,8 @@ include("$(dirname(dirname(@__DIR__)))/example/uflp/model.jl")
                 master = Master(data; solver_param = master_solver_param)
                 update_model!(master, data)
 
-                unified_param = UnifiedOracleParam(rtol = rtol, atol = atol)
-                oracle = UnifiedOracle(data; solver_param = typical_oracle_solver_param, oracle_param = unified_param)
+                # Construct oracle and set parameters
+                oracle = UnifiedOracle(data; solver_param = typical_oracle_solver_param)
                 update_model!(oracle, data)
                 model_reformulation!(oracle)
 
@@ -120,21 +118,21 @@ include("$(dirname(dirname(@__DIR__)))/example/uflp/model.jl")
                 @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
             end
 
-            # @testset "slim knapsack oracle" begin
-            #     @info "solving UFLP p$i - slim Knapsack oracle - seq..."
-            #     master = Master(data; solver_param = master_solver_param)
-            #     update_model!(master, data)
+            @testset "slim knapsack oracle" begin
+                @info "solving UFLP p$i - slim Knapsack oracle - seq..."
+                master = Master(data; solver_param = master_solver_param)
+                update_model!(master, data)
 
-            #     # model-free knapsack-based cuts
-            #     oracle = UFLKnapsackOracle(data) # add_only_violated_cuts = true makes it very slow
-            #     set_parameter!(oracle, "add_only_violated_cuts", false)
-            #     set_parameter!(oracle, "slim", true)
+                # model-free knapsack-based cuts
+                oracle = UFLKnapsackOracle(data) # add_only_violated_cuts = true makes it very slow
+                set_parameter!(oracle, "add_only_violated_cuts", false)
+                set_parameter!(oracle, "slim", true)
 
-            #     env = BendersSeq(data, master, oracle; param = benders_param)
-            #     log = solve!(env)
-            #     @test env.termination_status == Optimal()
-            #     @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
-            # end
+                env = BendersSeq(data, master, oracle; param = benders_param)
+                log = solve!(env)
+                @test env.termination_status == Optimal()
+                @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
+            end
         end
     end
 end

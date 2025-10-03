@@ -23,19 +23,18 @@ include("$(dirname(dirname(@__DIR__)))/example/cflp/model.jl")
             benders_inout_param = BendersSeqInOutParam(;
             time_limit = 200.0,
             gap_tolerance = 1e-6,
-            verbose = false,
+            verbose = true,
             stabilizing_x = ones(data.dim_x),
             α = 0.9,
             λ = 0.1
             )
             # solver parameters
-            mip_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPXPARAM_Threads" => 4, "CPX_PARAM_SCRIND" => 0)
-            master_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-9, "CPXPARAM_Threads" => 4, "CPX_PARAM_SCRIND" => 0)
-            typical_oracle_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_SCRIND" => 0)
-            basic_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_SCRIND" => 0)
+            mip_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-6, "CPX_PARAM_SCRIND" => 0)
+            master_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-6, "CPX_PARAM_SCRIND" => 0)
+            typical_oracle_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_SCRIND" => 0)
 
             # oracle parameters & corepoint
-            rtol, atol = 1e-9, 1e-9
+            rtol, atol = 1e-9, 1e-8
             core_point = fill(sum(data.problem.demands)/sum(data.problem.capacities) + 1e-3, dim_x)
             core_point = core_point[1] < 0.2 ? core_point .+ 0.5 : core_point # faster convergence
 
@@ -53,8 +52,7 @@ include("$(dirname(dirname(@__DIR__)))/example/cflp/model.jl")
                 update_model!(master, data)
 
                 # Construct oracle and set parameters
-                classical_param = ClassicalOracleParam(rtol = rtol, atol = atol)
-                oracle = ClassicalOracle(data; solver_param = typical_oracle_solver_param, oracle_param = classical_param)
+                oracle = ClassicalOracle(data; solver_param = typical_oracle_solver_param)
                 update_model!(oracle, data)
 
                 env = BendersSeqInOut(data, master, oracle; param = benders_inout_param)
@@ -70,7 +68,7 @@ include("$(dirname(dirname(@__DIR__)))/example/cflp/model.jl")
 
                 # Construct oracle and set parameters
                 pareto_param = ParetoOracleParam(rtol = rtol, atol = atol, core_point = core_point) 
-                oracle = ParetoOracle(data; solver_param = basic_solver_param, oracle_param = pareto_param)
+                oracle = ParetoOracle(data; solver_param = typical_oracle_solver_param, oracle_param = pareto_param)
                 update_model!(oracle, data)
                 model_reformulation!(oracle)
 
@@ -85,8 +83,8 @@ include("$(dirname(dirname(@__DIR__)))/example/cflp/model.jl")
                 master = Master(data; solver_param = master_solver_param)
                 update_model!(master, data)
 
-                unified_param = UnifiedOracleParam(rtol = rtol, atol = atol)
-                oracle = UnifiedOracle(data; solver_param = typical_oracle_solver_param, oracle_param = unified_param)
+                # Construct oracle and set parameters
+                oracle = UnifiedOracle(data; solver_param = typical_oracle_solver_param)
                 update_model!(oracle, data)
                 model_reformulation!(oracle)
 

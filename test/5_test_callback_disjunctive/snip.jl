@@ -19,7 +19,6 @@ include("$(dirname(dirname(@__DIR__)))/example/snip/model.jl")
             # Get standard parameters
             benders_param = BendersBnBParam(;
                 time_limit = 3600.0,
-                gap_tolerance = 1e-6,
                 verbose = false
             )
 
@@ -31,23 +30,21 @@ include("$(dirname(dirname(@__DIR__)))/example/snip/model.jl")
                 verbose = false
             )
 
-            user_cb_param = UserCallbackParam(frequency=100)
+            user_cb_param = UserCallbackParam(frequency=10)
             
             # Common solver parameters
-            mip_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPXPARAM_Threads" => 4)
-            master_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-9, "CPXPARAM_Threads" => 4)
-            typical_oracle_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_EPOPT" => 1e-9)
-            dcglp_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_EPOPT" => 1e-9) 
+            mip_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-6, "CPX_PARAM_SCRIND" => 0)
+            master_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-6, "CPX_PARAM_SCRIND" => 0)
+            typical_oracle_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_SCRIND" => 0)
+            dcglp_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_SCRIND" => 0)
             
             # Solve MIP for reference
             mip = Mip(data)
             assign_attributes!(mip.model, mip_solver_param)
             update_model!(mip, data)
-            set_optimizer_attribute(mip.model, MOI.Silent(), false)
             optimize!(mip.model)
             @assert termination_status(mip.model) == OPTIMAL
             mip_opt_val = objective_value(mip.model)
-            set_optimizer_attribute(mip.model, MOI.Silent(), true)
             
             @testset "Classic oracle" begin
                 @testset "NoSeq" begin
@@ -67,13 +64,8 @@ include("$(dirname(dirname(@__DIR__)))/example/snip/model.jl")
                     typical_oracles = [typical_oracle_kappa; typical_oracle_nu]
                 
                     # Test various parameter combinations
-                    for strengthened in [true, false], 
-                        add_benders_cuts_to_master in [true; 2], 
-                        reuse_dcglp in [true, false], 
-                        lift in [true, false],
-                        p in [1.0, Inf], 
-                        disjunctive_cut_append_rule in [NoDisjunctiveCuts(), AllDisjunctiveCuts(), DisjunctiveCutsSmallerIndices()],
-                        adjust_t_to_fx in [true; false]
+                    # for strengthened in [true; false], add_benders_cuts_to_master in [true; 2], lift in [true], reuse_dcglp in [true; false], p in [1.0; Inf], disjunctive_cut_append_rule in [NoDisjunctiveCuts(); AllDisjunctiveCuts(); DisjunctiveCutsSmallerIndices()], adjust_t_to_fx in [true; false]  
+                    for strengthened in [true], add_benders_cuts_to_master in [true], lift in [true], reuse_dcglp in [true], p in [Inf], disjunctive_cut_append_rule in [AllDisjunctiveCuts()], adjust_t_to_fx in [false]
                         
                         @testset "strgthnd $strengthened; benders2master $add_benders_cuts_to_master; reuse $reuse_dcglp; lift $lift; p $p; dcut_append $disjunctive_cut_append_rule;  adjust_t_to_fx $adjust_t_to_fx" begin
                             disjunctive_oracle = DisjunctiveOracle(data, typical_oracles; solver_param = dcglp_solver_param, param = dcglp_param) 

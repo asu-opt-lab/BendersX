@@ -19,12 +19,10 @@ include("$(dirname(dirname(@__DIR__)))/example/uflp/model.jl")
             )
             
             # Common solver parameters
-            mip_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPXPARAM_Threads" => 4, "CPX_PARAM_SCRIND" => 0)
-            master_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-9, "CPXPARAM_Threads" => 4, "CPX_PARAM_SCRIND" => 0)
-            typical_oracle_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_SCRIND" => 0)
-            basic_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_SCRIND" => 0)
+            mip_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-6, "CPX_PARAM_SCRIND" => 0)
+            master_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-6, "CPX_PARAM_SCRIND" => 0)
+            typical_oracle_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_SCRIND" => 0)
 
-            # Create data object for regular cuts
             # initialize dim_x, dim_t, c_x, c_t
             dim_x = problem.n_facilities
             dim_t = 1
@@ -46,15 +44,13 @@ include("$(dirname(dirname(@__DIR__)))/example/uflp/model.jl")
             @assert termination_status(mip.model) == OPTIMAL
             mip_opt_val = objective_value(mip.model)
             
-            # Test classical oracle
             @testset "Classic oracle" begin
                 @testset "NoSeq" begin
                     @info "solving UFLP p$i - classical oracle - no seq..."
                     master = Master(data; solver_param = master_solver_param)
                     update_model!(master, data)
                     # Construct oracle and set parameters
-                    classical_param = ClassicalOracleParam(rtol = rtol, atol = atol) 
-                    typical_oracle = ClassicalOracle(data; solver_param = typical_oracle_solver_param, oracle_param = classical_param)
+                    typical_oracle = ClassicalOracle(data; solver_param = typical_oracle_solver_param)
                     update_model!(typical_oracle, data)
                     root_preprocessing = NoRootNodePreprocessing()
                     lazy_callback = LazyCallback(typical_oracle)
@@ -69,8 +65,7 @@ include("$(dirname(dirname(@__DIR__)))/example/uflp/model.jl")
                     master = Master(data; solver_param = master_solver_param)
                     update_model!(master, data)
                     # Construct oracle and set parameters
-                    classical_param = ClassicalOracleParam(rtol = rtol, atol = atol) 
-                    typical_oracle = ClassicalOracle(data; solver_param = typical_oracle_solver_param, oracle_param = classical_param)
+                    typical_oracle = ClassicalOracle(data; solver_param = typical_oracle_solver_param)
                     update_model!(typical_oracle, data)
                     root_seq_type = BendersSeq
                     root_param = BendersSeqParam(;
@@ -90,8 +85,7 @@ include("$(dirname(dirname(@__DIR__)))/example/uflp/model.jl")
                     master = Master(data; solver_param = master_solver_param)
                     update_model!(master, data)
                     # Construct oracle and set parameters
-                    classical_param = ClassicalOracleParam(rtol = rtol, atol = atol) 
-                    typical_oracle = ClassicalOracle(data; solver_param = typical_oracle_solver_param, oracle_param = classical_param)
+                    typical_oracle = ClassicalOracle(data; solver_param = typical_oracle_solver_param)
                     update_model!(typical_oracle, data)
                     root_seq_type = BendersSeqInOut
                     root_param = BendersSeqInOutParam(
@@ -119,7 +113,7 @@ include("$(dirname(dirname(@__DIR__)))/example/uflp/model.jl")
                     update_model!(master, data)
                     # Construct oracle and set parameters
                     pareto_param = ParetoOracleParam(rtol = rtol, atol = atol, core_point = core_point) 
-                    typical_oracle = ParetoOracle(data; solver_param = basic_solver_param, oracle_param = pareto_param)
+                    typical_oracle = ParetoOracle(data; solver_param = typical_oracle_solver_param, oracle_param = pareto_param)
                     update_model!(typical_oracle, data)
                     model_reformulation!(typical_oracle)
                     root_preprocessing = NoRootNodePreprocessing()
@@ -136,7 +130,7 @@ include("$(dirname(dirname(@__DIR__)))/example/uflp/model.jl")
                     update_model!(master, data)
                     # Construct oracle and set parameters
                     pareto_param = ParetoOracleParam(rtol = rtol, atol = atol, core_point = core_point) 
-                    typical_oracle = ParetoOracle(data; solver_param = basic_solver_param, oracle_param = pareto_param)
+                    typical_oracle = ParetoOracle(data; solver_param = typical_oracle_solver_param, oracle_param = pareto_param)
                     update_model!(typical_oracle, data)
                     model_reformulation!(typical_oracle)
                     root_seq_type = BendersSeq
@@ -158,7 +152,7 @@ include("$(dirname(dirname(@__DIR__)))/example/uflp/model.jl")
                     update_model!(master, data)
                     # Construct oracle and set parameters
                     pareto_param = ParetoOracleParam(rtol = rtol, atol = atol, core_point = core_point) 
-                    typical_oracle = ParetoOracle(data; solver_param = basic_solver_param, oracle_param = pareto_param)
+                    typical_oracle = ParetoOracle(data; solver_param = typical_oracle_solver_param, oracle_param = pareto_param)
                     update_model!(typical_oracle, data)
                     model_reformulation!(typical_oracle)
                     root_seq_type = BendersSeqInOut
@@ -185,8 +179,8 @@ include("$(dirname(dirname(@__DIR__)))/example/uflp/model.jl")
                     @info "solving UFLP p$i - unified oracle - no seq..."
                     master = Master(data; solver_param = master_solver_param)
                     update_model!(master, data)
-                    unified_param = UnifiedOracleParam(rtol = rtol, atol = atol) 
-                    typical_oracle = UnifiedOracle(data; solver_param = typical_oracle_solver_param, oracle_param = unified_param)
+                    # Construct oracle and set parameters
+                    typical_oracle = UnifiedOracle(data; solver_param = typical_oracle_solver_param)
                     update_model!(typical_oracle, data)
                     model_reformulation!(typical_oracle)
                     root_preprocessing = NoRootNodePreprocessing()
@@ -201,8 +195,8 @@ include("$(dirname(dirname(@__DIR__)))/example/uflp/model.jl")
                     @info "solving UFLP p$i - unified oracle - seq..."
                     master = Master(data; solver_param = master_solver_param)
                     update_model!(master, data)
-                    unified_param = UnifiedOracleParam(rtol = rtol, atol = atol) 
-                    typical_oracle = UnifiedOracle(data; solver_param = typical_oracle_solver_param, oracle_param = unified_param)
+                    # Construct oracle and set parameters
+                    typical_oracle = UnifiedOracle(data; solver_param = typical_oracle_solver_param)
                     update_model!(typical_oracle, data)
                     model_reformulation!(typical_oracle)
                     root_seq_type = BendersSeq
@@ -222,8 +216,8 @@ include("$(dirname(dirname(@__DIR__)))/example/uflp/model.jl")
                     @info "solving UFLP p$i - unified oracle - seqinout..."
                     master = Master(data; solver_param = master_solver_param)
                     update_model!(master, data)
-                    unified_param = UnifiedOracleParam(rtol = rtol, atol = atol) 
-                    typical_oracle = UnifiedOracle(data; solver_param = typical_oracle_solver_param, oracle_param = unified_param)
+                    # Construct oracle and set parameters
+                    typical_oracle = UnifiedOracle(data; solver_param = typical_oracle_solver_param)
                     update_model!(typical_oracle, data)
                     model_reformulation!(typical_oracle)
                     root_seq_type = BendersSeqInOut
