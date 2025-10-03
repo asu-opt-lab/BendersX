@@ -1,25 +1,16 @@
-export ClassicalOracle, ClassicalOracleParam
-
-mutable struct ClassicalOracleParam <: AbstractOracleParam
-    rtol::Float64
-    atol::Float64
-
-    function ClassicalOracleParam(; rtol = 1e-9, atol = 1e-9)
-        new(rtol, atol)
-    end
-end
+export ClassicalOracle
 
 mutable struct ClassicalOracle <: AbstractTypicalOracle
     
-    oracle_param::ClassicalOracleParam
+    oracle_param::AbstractOracleParam
 
     model::Model
     fixed_x_constraints::Vector{ConstraintRef}
 
     function ClassicalOracle(data::Data; 
                              scen_idx::Int=-1, 
-                             solver_param::Dict{String,Any} = Dict("solver" => "CPLEX", "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_EPOPT" => 1e-9),
-                             oracle_param::ClassicalOracleParam = ClassicalOracleParam())
+                             solver_param::Dict{String,Any} = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_SCRIND" => 0),
+                             oracle_param::BasicOracleParam = BasicOracleParam())
         @debug "Building classical oracle"
         model = Model()
 
@@ -50,7 +41,7 @@ function generate_cuts(oracle::ClassicalOracle, x_value::Vector{Float64}, t_valu
         a_x = dual.(oracle.fixed_x_constraints) 
         a_t = [-1.0] 
         a_0 = sub_obj_val - a_x'*x_value 
-        if sub_obj_val >= t_value[1] * (1 + oracle.oracle_param.rtol / tol_normalize) + oracle.oracle_param.atol
+        if sub_obj_val >= t_value[1]/tol_normalize * (1 + oracle.oracle_param.rtol) + oracle.oracle_param.atol
             return false, [Hyperplane(a_x, a_t, a_0)], [sub_obj_val]
         else
             return true, [Hyperplane(a_x, a_t, a_0)], [sub_obj_val]
@@ -63,7 +54,7 @@ function generate_cuts(oracle::ClassicalOracle, x_value::Vector{Float64}, t_valu
             a_x = dual.(oracle.fixed_x_constraints)
             a_t = [0.0]
             a_0 = dual_sub_obj_val - a_x'*x_value 
-            if dual_sub_obj_val >= oracle.oracle_param.atol / tol_normalize
+            if dual_sub_obj_val >= oracle.oracle_param.zero_tol/tol_normalize
                 return false, [Hyperplane(a_x, a_t, a_0)], [Inf]
             else
                 return true, [Hyperplane(a_x, a_t, a_0)], [Inf]

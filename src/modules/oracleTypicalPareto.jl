@@ -5,7 +5,7 @@ mutable struct ParetoOracleParam <: AbstractOracleParam
     atol::Float64
     core_point::Vector{Float64}
 
-    function ParetoOracleParam(; core_point = Float64[], rtol = 1e-9, atol = 1e-9)
+    function ParetoOracleParam(; core_point = Float64[], rtol = 1e-9, atol = 0.0)
         isempty(core_point) && throw(AlgorithmException("Please provide core point"))
         new(rtol, atol, core_point)
     end
@@ -13,7 +13,7 @@ end
 
 mutable struct ParetoOracle <: AbstractTypicalOracle
     
-    oracle_param::ParetoOracleParam
+    oracle_param::AbstractOracleParam
     solver_param::Dict{String,Any}
 
     model::Model
@@ -23,7 +23,7 @@ mutable struct ParetoOracle <: AbstractTypicalOracle
 
     function ParetoOracle(data::Data;
                             scen_idx::Int=-1, 
-                            solver_param::Dict{String,Any} = Dict("solver" => "CPLEX", "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1),
+                            solver_param::Dict{String,Any} = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_SCRIND" => 0),
                             oracle_param::ParetoOracleParam = ParetoOracleParam())
 
         @debug "Building pareto oracle"

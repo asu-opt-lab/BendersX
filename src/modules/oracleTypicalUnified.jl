@@ -1,17 +1,8 @@
-export UnifiedOracle, UnifiedOracleParam, model_reformulation!
-
-mutable struct UnifiedOracleParam <: AbstractOracleParam
-    rtol::Float64
-    atol::Float64
-
-    function UnifiedOracleParam(; rtol = 1e-9, atol = 1e-9)
-        new(rtol, atol)
-    end
-end
+export UnifiedOracle, model_reformulation!
 
 mutable struct UnifiedOracle <: AbstractTypicalOracle
     
-    oracle_param::UnifiedOracleParam
+    oracle_param::AbstractOracleParam
     solver_param::Dict{String,Any}
 
     model::Model
@@ -19,8 +10,8 @@ mutable struct UnifiedOracle <: AbstractTypicalOracle
 
     function UnifiedOracle(data::Data;
                             scen_idx::Int=-1, 
-                            solver_param::Dict{String,Any} = Dict("solver" => "CPLEX", "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_EPOPT" => 1e-9),
-                            oracle_param::UnifiedOracleParam = UnifiedOracleParam())
+                            solver_param::Dict{String,Any} = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_SCRIND" => 0),
+                            oracle_param::BasicOracleParam = BasicOracleParam())
 
         @debug "Building unified oracle"
         model = Model()
@@ -56,7 +47,7 @@ function generate_cuts(oracle::UnifiedOracle, x_value::Vector{Float64}, t_value:
     a_t = [-dual(oracle.unified_model[:epigraph])]
     a_0 = objective_value(oracle.unified_model) - a_x'*x_value + dual(oracle.unified_model[:epigraph])*t_value[1]
     
-    return isapprox(dual_objective_value(oracle.unified_model), 0, atol=1e-6) ? (true, [], [NaN]) : (false, [Hyperplane(a_x, a_t, a_0)], [NaN])
+    return isapprox(dual_objective_value(oracle.unified_model), 0, atol=oracle.oracle_param.zero_tol) ? (true, [], [NaN]) : (false, [Hyperplane(a_x, a_t, a_0)], [NaN])
 end
 
 function model_reformulation!(oracle::UnifiedOracle) 

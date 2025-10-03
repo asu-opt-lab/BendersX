@@ -13,7 +13,7 @@ mutable struct SeparableOracle <: AbstractTypicalOracle
     function SeparableOracle(data::Data, 
                             oracle::T, 
                             N::Int; 
-                            solver_param::Dict{String,Any} = Dict("solver" => "CPLEX", "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_EPOPT" => 1e-9), 
+                            solver_param::Dict{String,Any} = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_SCRIND" => 0), 
                             sub_oracle_param::AbstractOracleParam = EmptyOracleParam(),
                             oracle_param::SeparableOracleParam = SeparableOracleParam()) where {T<:AbstractTypicalOracle}
         @debug "Building classical separable oracle"
