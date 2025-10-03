@@ -54,9 +54,7 @@ function solve!(env::BendersSeq; iter_prefix = "")
                     
                     cuts = !state.is_in_L ? hyperplanes_to_expression(env.master.model, hyperplanes, env.master.model[:x], env.master.model[:t]) : []
 
-                    if !isnan(state.f_x[1])
-                        update_upper_bound_and_gap!(state, log, (f_x, x) -> env.data.c_t' * f_x + env.data.c_x' * x)
-                    end
+                    update_upper_bound_and_gap!(state, log, (f_x, x) -> env.data.c_t' * f_x + env.data.c_x' * x)
                 end
 
                 record_iteration!(log, state)
