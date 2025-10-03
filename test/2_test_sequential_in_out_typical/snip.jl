@@ -1,21 +1,17 @@
-# to be overwritten, they should be included outside testset
-include("$(dirname(dirname(@__DIR__)))/example/scflp/data_reader.jl")
-include("$(dirname(dirname(@__DIR__)))/example/cflp/oracle.jl")
-include("$(dirname(dirname(@__DIR__)))/example/scflp/model.jl")
+include("$(dirname(dirname(@__DIR__)))/example/snip/data_reader.jl")
+include("$(dirname(dirname(@__DIR__)))/example/snip/model.jl")
 
-@testset verbose = true "Stochastic CFLP Sequential In/Out Benders Tests" begin
-    instances = 1:5
-    
-    for i in instances
-        @testset "Instance: f25-c50-s64-r10-$i" begin
+@testset verbose = true "SNIP Sequential Benders Tests" begin
+    for instance in [0], snipno in [0], budget in [30.0]
+        @testset "instance $instance; snipno $snipno budget $budget" begin
             # Load problem data if necessary
-            problem = read_stochastic_capacited_facility_location_problem("f25-c50-s64-r10-$i")
-            
+            problem = read_snip_data(instance, snipno, budget)
+
             # initialize dim_x, dim_t, c_x, c_t
-            dim_x = problem.n_facilities
-            dim_t = problem.n_scenarios
-            c_x = problem.fixed_costs
-            c_t = fill(1/problem.n_scenarios, problem.n_scenarios)
+            dim_x = length(problem.D)
+            dim_t = problem.num_scenarios
+            c_x = zeros(dim_x)
+            c_t = map(p -> p[3], problem.scenarios)
             data = Data(dim_x, dim_t, problem, c_x, c_t)
             @assert dim_x == length(data.c_x)
             @assert dim_t == length(data.c_t)
@@ -29,6 +25,7 @@ include("$(dirname(dirname(@__DIR__)))/example/scflp/model.jl")
                 α = 0.9,
                 λ = 0.1
             )
+
             # solver parameters
             mip_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-6, "CPX_PARAM_SCRIND" => 0)
             master_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-6, "CPX_PARAM_SCRIND" => 0)
@@ -36,8 +33,7 @@ include("$(dirname(dirname(@__DIR__)))/example/scflp/model.jl")
 
             # oracle parameters & corepoint
             rtol, atol = 1e-9, 1e-9
-            core_point = fill(maximum([sum(data.problem.demands[k]) for k in 1:length(data.problem.demands)])/sum(data.problem.capacities), dim_x)
-            core_point = core_point[1] < 0.2 ? core_point .+ 0.5 : core_point # faster convergence
+            core_point = fill(data.problem.budget/length(data.problem.D)-1e-3, dim_x)
 
             # solve mip for reference
             mip = Mip(data)
@@ -47,13 +43,13 @@ include("$(dirname(dirname(@__DIR__)))/example/scflp/model.jl")
             @assert termination_status(mip.model) == OPTIMAL
             mip_opt_val = objective_value(mip.model)
 
-            @testset "Classic oracle" begin
-                @info "solving SCFLP f25-c50-s64-r10-$i - classical oracle - seqinout..."
+            @testset "Classic oracle" begin     
+                @info "solving SNIP instance$instance snipno $snipno budget $budget - classical oracle - seqinout..."
                 master = Master(data; solver_param = master_solver_param)
                 update_model!(master, data)
 
                 # Construct oracle and set parameters
-                oracle = SeparableOracle(data, ClassicalOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param)
+                oracle = SeparableOracle(data, ClassicalOracle(), data.problem.num_scenarios; solver_param = typical_oracle_solver_param)
                 for j=1:oracle.N
                     update_model!(oracle.oracles[j], data, j)
                 end
@@ -65,19 +61,19 @@ include("$(dirname(dirname(@__DIR__)))/example/scflp/model.jl")
             end 
 
             @testset "Pareto oracle" begin     
-                @info "solving SCFLP f25-c50-s64-r10-$i - pareto oracle - seqinout..."
+                @info "solving SNIP instance$instance snipno $snipno budget $budget - pareto oracle - seqinout..."
                 master = Master(data; solver_param = master_solver_param)
                 update_model!(master, data)
                 
                 # Construct oracle and set parameters
                 pareto_param = ParetoOracleParam(rtol = rtol, atol = atol, core_point = core_point)
-                oracle = SeparableOracle(data, ParetoOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param, sub_oracle_param = pareto_param)
-                
+                oracle = SeparableOracle(data, ParetoOracle(), data.problem.num_scenarios; solver_param = typical_oracle_solver_param, sub_oracle_param = pareto_param)
+        
                 for j=1:oracle.N
                     update_model!(oracle.oracles[j], data, j)
                     model_reformulation!(oracle.oracles[j])
                 end
-                
+
                 env = BendersSeqInOut(data, master, oracle; param = benders_inout_param)
                 log = solve!(env)
                 @test env.termination_status == Optimal()
@@ -85,12 +81,12 @@ include("$(dirname(dirname(@__DIR__)))/example/scflp/model.jl")
             end 
 
             @testset "Unified oracle" begin
-                @info "solving SCFLP f25-c50-s64-r10-$i - unified oracle - seqinout..."
+                @info "solving SNIP instance$instance snipno $snipno budget $budget - unified oracle - seqinout..."
                 master = Master(data; solver_param = master_solver_param)
                 update_model!(master, data)
 
                 # Construct oracle and set parameters
-                oracle = SeparableOracle(data, UnifiedOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param)
+                oracle = SeparableOracle(data, UnifiedOracle(), data.problem.num_scenarios; solver_param = typical_oracle_solver_param)
                 for j=1:oracle.N
                     update_model!(oracle.oracles[j], data, j)
                     model_reformulation!(oracle.oracles[j])
@@ -101,24 +97,6 @@ include("$(dirname(dirname(@__DIR__)))/example/scflp/model.jl")
                 @test env.termination_status == Optimal()
                 @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
             end
-            
-            # @testset "Knapsack oracle" begin
-            #     @info "solving SCFLP f25-c50-s64-r10-$i - knapsack oracle - seqinout..."
-            #     master = Master(data; solver_param = master_solver_param)
-            #     update_model!(master, data)
-
-            #     # Construct oracle and set parameters
-            #     cflp_param = CFLKnapsackOracleParam(rtol = rtol, atol = atol)
-            #     oracle = SeparableOracle(data, CFLKnapsackOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param, sub_oracle_param = cflp_param)
-            #     for j=1:oracle.N
-            #         update_model!(oracle.oracles[j], data, j)
-            #     end
-
-            #     env = BendersSeqInOut(data, master, oracle; param = benders_inout_param)
-            #     log = solve!(env)
-            #     @test env.termination_status == Optimal()
-            #     @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
-            # end
         end
     end
 end

@@ -3,7 +3,7 @@
 # ============================================================================
 
 export AbstractBendersDecomposition
-export Data, AbstractData
+export Data
 export AbstractMaster, AbstractMip
 export AbstractOracle, AbstractOracleParam
 export Seq, SeqInOut
@@ -12,6 +12,7 @@ export DisjunctiveCutsAppendRule, NoDisjunctiveCuts, AllDisjunctiveCuts, Disjunc
 export SplitIndexSelectionRule, RandomFractional, MostFractional, LargestFractional
 export TerminationStatus, NotSolved, TimeLimit, Optimal, InfeasibleOrNumericalIssue
 export TimeLimitException, UnexpectedModelStatusException, UndefError, AlgorithmException
+export ProblemType, SNIP
 
 
 abstract type AbstractBendersDecomposition end
@@ -32,11 +33,10 @@ abstract type AbstractOracleParam end
 # Global data type; Problem Data is optional; user can define their own structure for problem-specific data
 # To-Do: think about the type for `problem`. Should we remove `AbstractData`?
 # ============================================================================
-abstract type AbstractData end
 struct Data
     dim_x::Int
     dim_t::Int
-    problem::AbstractData
+    problem::Any
     c_x::Vector{Float64}
     c_t::Vector{Float64}
 end
@@ -95,5 +95,10 @@ struct UndefError <: Exception
     msg::String
 end
 
+# ============================================================================
+# Problem types
+# ============================================================================
+abstract type ProblemType end
+struct SNIP <: ProblemType end
 
 

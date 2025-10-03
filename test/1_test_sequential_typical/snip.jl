@@ -1,20 +1,17 @@
-include("$(dirname(dirname(@__DIR__)))/example/cflp/data_reader.jl")
-include("$(dirname(dirname(@__DIR__)))/example/cflp/oracle.jl")
-include("$(dirname(dirname(@__DIR__)))/example/cflp/model.jl")
+include("$(dirname(dirname(@__DIR__)))/example/snip/data_reader.jl")
+include("$(dirname(dirname(@__DIR__)))/example/snip/model.jl")
 
-@testset verbose = true "CFLP Sequential Benders Tests" begin
-    instances = setdiff(1:71, [67])
-
-    for i in instances
-        @testset "Instance: p$i" begin
+@testset verbose = true "SNIP Sequential Benders Tests" begin
+    for instance in [0], snipno in [0], budget in [30.0]
+        @testset "instance $instance; snipno $snipno budget $budget" begin
             # Load problem data if necessary
-            problem = read_cflp_benchmark_data("p$i")
-            
+            problem = read_snip_data(instance, snipno, budget)
+
             # initialize dim_x, dim_t, c_x, c_t
-            dim_x = problem.n_facilities
-            dim_t = 1
-            c_x = problem.fixed_costs
-            c_t = [1]
+            dim_x = length(problem.D)
+            dim_t = problem.num_scenarios
+            c_x = zeros(dim_x)
+            c_t = map(p -> p[3], problem.scenarios)
             data = Data(dim_x, dim_t, problem, c_x, c_t)
             @assert dim_x == length(data.c_x)
             @assert dim_t == length(data.c_t)
@@ -30,11 +27,10 @@ include("$(dirname(dirname(@__DIR__)))/example/cflp/model.jl")
             mip_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-6, "CPX_PARAM_SCRIND" => 0)
             master_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPGAP" => 1e-6, "CPX_PARAM_SCRIND" => 0)
             typical_oracle_solver_param = Dict("solver" => "CPLEX", "CPXPARAM_Threads" => 7, "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_EPOPT" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_SCRIND" => 0)
-
+            
             # oracle parameters & corepoint
             rtol, atol = 1e-9, 1e-9
-            core_point = fill(sum(data.problem.demands)/sum(data.problem.capacities) + 1e-3, dim_x)
-            core_point = core_point[1] < 0.2 ? core_point .+ 0.5 : core_point # faster convergence
+            core_point = fill(data.problem.budget/length(data.problem.D)-1e-3, dim_x)
 
             # solve mip for reference
             mip = Mip(data)
@@ -44,14 +40,16 @@ include("$(dirname(dirname(@__DIR__)))/example/cflp/model.jl")
             @assert termination_status(mip.model) == OPTIMAL
             mip_opt_val = objective_value(mip.model)
 
-            @testset "Classic oracle" begin
-                @info "solving CFLP p$i - classical oracle - seq..."
+            @testset "Classic oracle" begin     
+                @info "solving SNIP instance$instance snipno $snipno budget $budget - classical oracle - seq..."
                 master = Master(data; solver_param = master_solver_param)
                 update_model!(master, data)
 
                 # Construct oracle and set parameters
-                oracle = ClassicalOracle(data; solver_param = typical_oracle_solver_param)
-                update_model!(oracle, data)
+                oracle = SeparableOracle(data, ClassicalOracle(), data.problem.num_scenarios; solver_param = typical_oracle_solver_param)
+                for j=1:oracle.N
+                    update_model!(oracle.oracles[j], data, j)
+                end
 
                 env = BendersSeq(data, master, oracle; param = benders_param)
                 log = solve!(env)
@@ -59,48 +57,37 @@ include("$(dirname(dirname(@__DIR__)))/example/cflp/model.jl")
                 @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
             end 
 
-            @testset "Pareto oracle" begin
-                @info "solving CFLP p$i - pareto oracle - seq..."
+            @testset "Pareto oracle" begin     
+                @info "solving SNIP instance$instance snipno $snipno budget $budget - pareto oracle - seq..."
                 master = Master(data; solver_param = master_solver_param)
                 update_model!(master, data)
-
+                
                 # Construct oracle and set parameters
-                pareto_param = ParetoOracleParam(rtol = rtol, atol = atol, core_point = core_point) 
-                oracle = ParetoOracle(data; solver_param = typical_oracle_solver_param, oracle_param = pareto_param)
-                update_model!(oracle, data)
-                model_reformulation!(oracle)
+                pareto_param = ParetoOracleParam(rtol = rtol, atol = atol, core_point = core_point)
+                oracle = SeparableOracle(data, ParetoOracle(), data.problem.num_scenarios; solver_param = typical_oracle_solver_param, sub_oracle_param = pareto_param)
+        
+                for j=1:oracle.N
+                    update_model!(oracle.oracles[j], data, j)
+                    model_reformulation!(oracle.oracles[j])
+                end
 
                 env = BendersSeq(data, master, oracle; param = benders_param)
                 log = solve!(env)
                 @test env.termination_status == Optimal()
                 @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
-            end
+            end 
 
             @testset "Unified oracle" begin
-                @info "solving CFLP p$i - unified oracle - seq..."
+                @info "solving SNIP instance$instance snipno $snipno budget $budget - unified oracle - seq..."
                 master = Master(data; solver_param = master_solver_param)
                 update_model!(master, data)
 
                 # Construct oracle and set parameters
-                oracle = UnifiedOracle(data; solver_param = typical_oracle_solver_param)
-                update_model!(oracle, data)
-                model_reformulation!(oracle)
-
-                env = BendersSeq(data, master, oracle; param = benders_param)
-                log = solve!(env)
-                @test env.termination_status == Optimal()
-                @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
-            end
-            
-            @testset "Knapsack oracle" begin
-                @info "solving CFLP p$i - knapsack oracle - seq..."
-                master = Master(data; solver_param = master_solver_param)
-                update_model!(master, data)
-
-                # Construct oracle and set parameters
-                cflp_param = CFLKnapsackOracleParam(rtol = rtol, atol = atol) 
-                oracle = CFLKnapsackOracle(data; solver_param = typical_oracle_solver_param, oracle_param = cflp_param)
-                update_model!(oracle, data)
+                oracle = SeparableOracle(data, UnifiedOracle(), data.problem.num_scenarios; solver_param = typical_oracle_solver_param)
+                for j=1:oracle.N
+                    update_model!(oracle.oracles[j], data, j)
+                    model_reformulation!(oracle.oracles[j])
+                end
 
                 env = BendersSeq(data, master, oracle; param = benders_param)
                 log = solve!(env)
