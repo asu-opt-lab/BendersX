@@ -3,11 +3,12 @@ export ParetoOracle, ParetoOracleParam, model_reformulation!
 mutable struct ParetoOracleParam <: AbstractOracleParam
     rtol::Float64
     atol::Float64
+    zero_tol::Float64
     core_point::Vector{Float64}
 
-    function ParetoOracleParam(; core_point = Float64[], rtol = 1e-9, atol = 0.0)
+    function ParetoOracleParam(; core_point = Float64[], rtol = 1e-9, atol = 0.0, zero_tol = 0.0)
         isempty(core_point) && throw(AlgorithmException("Please provide core point"))
-        new(rtol, atol, core_point)
+        new(rtol, atol, zero_tol, core_point)
     end
 end
 
@@ -78,7 +79,8 @@ function generate_cuts(oracle::ParetoOracle, x_value::Vector{Float64}, t_value::
             a_x = dual.(oracle.fixed_x_constraints)
             a_t = [0.0]
             a_0 = dual_sub_obj_val - a_x'*x_value 
-            if dual_sub_obj_val >= oracle.oracle_param.atol / tol_normalize
+
+            if dual_sub_obj_val >= oracle.oracle_param.zero_tol / tol_normalize
                 return false, [Hyperplane(a_x, a_t, a_0)], [Inf]
             else
                 return true, [Hyperplane(a_x, a_t, a_0)], [Inf]
