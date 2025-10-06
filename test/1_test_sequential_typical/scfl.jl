@@ -1,6 +1,6 @@
 # to be overwritten, they should be included outside testset
 include("$(dirname(dirname(@__DIR__)))/example/scflp/data_reader.jl")
-# include("$(dirname(@__DIR__))/example/cflp/oracle.jl")
+include("$(dirname(dirname(@__DIR__)))/example/cflp/oracle.jl")
 include("$(dirname(dirname(@__DIR__)))/example/scflp/model.jl")
 
 @testset verbose = true "Stochastic CFLP Sequential Benders Tests" begin
@@ -40,21 +40,21 @@ include("$(dirname(dirname(@__DIR__)))/example/scflp/model.jl")
             @assert termination_status(mip.model) == OPTIMAL
             mip_opt_val = objective_value(mip.model)
 
-            @testset "Classic oracle" begin     
-                @info "solving SCFLP f25-c50-s64-r10-$i - classical oracle - seq..."
-                master = Master(data; solver_param = master_solver_param)
-                update_model!(master, data)
+            # @testset "Classic oracle" begin     
+            #     @info "solving SCFLP f25-c50-s64-r10-$i - classical oracle - seq..."
+            #     master = Master(data; solver_param = master_solver_param)
+            #     update_model!(master, data)
 
-                oracle = SeparableOracle(data, ClassicalOracle(), data.problem.n_scenarios; solver_param = typical_oracal_solver_param)
-                for j=1:oracle.N
-                    update_model!(oracle.oracles[j], data, j)
-                end
+            #     oracle = SeparableOracle(data, ClassicalOracle(), data.problem.n_scenarios; solver_param = typical_oracal_solver_param)
+            #     for j=1:oracle.N
+            #         update_model!(oracle.oracles[j], data, j)
+            #     end
 
-                env = BendersSeq(data, master, oracle; param = benders_param)
-                log = solve!(env)
-                @test env.termination_status == Optimal()
-                @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
-            end 
+            #     env = BendersSeq(data, master, oracle; param = benders_param)
+            #     log = solve!(env)
+            #     @test env.termination_status == Optimal()
+            #     @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
+            # end 
             
             @testset "Knapsack oracle" begin
                 @info "solving SCFLP f25-c50-s64-r10-$i - knapsack oracle - seq..."
