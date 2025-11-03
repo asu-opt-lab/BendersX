@@ -1,8 +1,9 @@
 using Test
 using BendersLibrary
 
-@testset "BendersBase.jl" begin
-    
+@testset "BendersLibrary.jl" begin
+
     include("test_types.jl")
-    
+    include("test_autodecomposeDisjunctive.jl")
+
 end
