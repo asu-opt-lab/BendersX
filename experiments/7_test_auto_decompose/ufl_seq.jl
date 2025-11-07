@@ -15,7 +15,7 @@ using JuMP
             dim_t = 1
             c_x = problem.fixed_costs
             c_t = [1.0]
-            data_for_mip = Data(dim_x, dim_t, problem, c_x, c_t)
+            data = Data(dim_x, dim_t, problem, c_x, c_t)
 
             # Algorithm parameters
             benders_param = BendersSeqParam(
@@ -30,9 +30,9 @@ using JuMP
             oracle_solver_param = Dict("solver" => "Gurobi", "InfUnbdInfo" => 1)
 
             # Solve MIP for reference
-            mip = Mip(data_for_mip)
+            mip = Mip(data)
             assign_attributes!(mip.model, mip_solver_param)
-            update_model!(mip, data_for_mip)
+            update_model!(mip, data)
             optimize!(mip.model)
             @assert termination_status(mip.model) == OPTIMAL
             mip_opt_val = objective_value(mip.model)
@@ -46,7 +46,7 @@ using JuMP
                     oracle_solver_param = oracle_solver_param
                 )
 
-                env = BendersSeq(data_for_mip, master, oracle; param = benders_param)
+                env = BendersSeq(data, master, oracle; param = benders_param)
                 log = solve!(env)
                 @test env.termination_status == Optimal()
                 @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
@@ -86,7 +86,7 @@ using JuMP
                     dcglp_param = dcglp_param
                 )
 
-                env = BendersSeq(data_for_mip, master, oracle; param = benders_param)
+                env = BendersSeq(data, master, oracle; param = benders_param)
                 log = solve!(env)
                 @test env.termination_status == Optimal()
                 @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
