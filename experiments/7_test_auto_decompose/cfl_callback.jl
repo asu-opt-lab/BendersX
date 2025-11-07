@@ -30,82 +30,86 @@ user_cb_param = UserCallbackParam(frequency=1)
             problem = read_cflp_benchmark_data("p$i")
 
             # Create traditional data for MIP reference
-            dim_x = problem.n_facilities
-            dim_t = 1
-            c_x = problem.fixed_costs
-            c_t = [1.0]
-            data = Data(dim_x, dim_t, problem, c_x, c_t)
+            model = Model()
+            set_optimizer_attribute(model, MOI.Silent(), true)
+            assign_attributes!(model, mip_solver_param)
+            N, M = problem.n_facilities, problem.n_customers
+            @variable(model, x[1:N], Bin)
+            @variable(model, y[1:N, 1:M] >= 0)
+            @objective(model, Min, 
+                sum(problem.costs[i,j] * problem.demands[j] * y[i,j] for i in 1:N, j in 1:M) + 
+                sum(problem.fixed_costs[i] * x[i] for i in 1:N)
+            )
+            @constraint(model, demand[j in 1:M], sum(y[:,j]) == 1)
+            @constraint(model, facility_open[i in 1:N, j in 1:M], y[i,j] <= x[i])
+            @constraint(model, capacity[i in 1:N], sum(problem.demands[:] .* y[i,:]) <= problem.capacities[i] * x[i])
+            @constraint(model, sum(problem.capacities[i] * x[i] for i in 1:N) >= sum(problem.demands))
+            optimize!(model)
+            @assert termination_status(model) == OPTIMAL
+            mip_opt_val = objective_value(model)
 
-            # Solve MIP for reference
-            mip = Mip(data)
-            assign_attributes!(mip.model, mip_solver_param)
-            update_model!(mip, data)
-            optimize!(mip.model)
-            @assert termination_status(mip.model) == OPTIMAL
-            mip_opt_val = objective_value(mip.model)
-
-            # @testset "Classical oracle" begin
-            #     @testset "NoSeq" begin
-            #         @info "solving CFLP p$i - classical oracle - no seq..."
-            #         data, master, typical_oracle = auto_decompose(
-            #             mip.model;
-            #             master_solver_param = master_solver_param,
-            #             oracle_solver_param = oracle_solver_param
-            #         )
-            #         root_preprocessing = NoRootNodePreprocessing()
-            #         lazy_callback = LazyCallback(typical_oracle)
-            #         user_callback = NoUserCallback()
-            #         env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
-            #         log = solve!(env)
-            #         @test env.termination_status == Optimal()
-            #         @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
-            #     end
-            #     @testset "Seq" begin
-            #         @info "solving CFLP p$i - classical oracle - seq..."
-            #         data, master, typical_oracle = auto_decompose(
-            #             mip.model;
-            #             master_solver_param = master_solver_param,
-            #             oracle_solver_param = oracle_solver_param
-            #         )
-            #         root_seq_type = BendersSeq
-            #         root_param = BendersSeqParam(;
-            #             time_limit = 200.0,
-            #             gap_tolerance = 1e-6,
-            #             verbose = false
-            #         )
-            #         root_preprocessing = RootNodePreprocessing(typical_oracle, root_seq_type, root_param)
-            #         lazy_callback = LazyCallback(typical_oracle)
-            #         user_callback = NoUserCallback()
-            #         env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
-            #         log = solve!(env)
-            #         @test env.termination_status == Optimal()
-            #         @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
-            #     end
-            #     @testset "SeqInOut" begin
-            #         @info "solving CFLP p$i - classical oracle - seqinout..."
-            #         data, master, typical_oracle = auto_decompose(
-            #             mip.model;
-            #             master_solver_param = master_solver_param,
-            #             oracle_solver_param = oracle_solver_param
-            #         )
-            #         root_seq_type = BendersSeqInOut
-            #         root_param = BendersSeqInOutParam(
-            #             time_limit = 300.0,
-            #             gap_tolerance = 1e-6,
-            #             stabilizing_x = ones(data.dim_x),
-            #             α = 0.9,
-            #             λ = 0.1,
-            #             verbose = false
-            #         )
-            #         root_preprocessing = RootNodePreprocessing(typical_oracle, root_seq_type, root_param)
-            #         lazy_callback = LazyCallback(typical_oracle)
-            #         user_callback = NoUserCallback()
-            #         env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
-            #         log = solve!(env)
-            #         @test env.termination_status == Optimal()
-            #         @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
-            #     end
-            # end
+            @testset "Classical oracle" begin
+                @testset "NoSeq" begin
+                    @info "solving CFLP p$i - classical oracle - no seq..."
+                    data, master, typical_oracle = auto_decompose(
+                        model;
+                        master_solver_param = master_solver_param,
+                        oracle_solver_param = oracle_solver_param
+                    )
+                    root_preprocessing = NoRootNodePreprocessing()
+                    lazy_callback = LazyCallback(typical_oracle)
+                    user_callback = NoUserCallback()
+                    env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
+                    log = solve!(env)
+                    @test env.termination_status == Optimal()
+                    @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
+                end
+                @testset "Seq" begin
+                    @info "solving CFLP p$i - classical oracle - seq..."
+                    data, master, typical_oracle = auto_decompose(
+                        model;
+                        master_solver_param = master_solver_param,
+                        oracle_solver_param = oracle_solver_param
+                    )
+                    root_seq_type = BendersSeq
+                    root_param = BendersSeqParam(;
+                        time_limit = 200.0,
+                        gap_tolerance = 1e-6,
+                        verbose = false
+                    )
+                    root_preprocessing = RootNodePreprocessing(typical_oracle, root_seq_type, root_param)
+                    lazy_callback = LazyCallback(typical_oracle)
+                    user_callback = NoUserCallback()
+                    env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
+                    log = solve!(env)
+                    @test env.termination_status == Optimal()
+                    @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
+                end
+                @testset "SeqInOut" begin
+                    @info "solving CFLP p$i - classical oracle - seqinout..."
+                    data, master, typical_oracle = auto_decompose(
+                        model;
+                        master_solver_param = master_solver_param,
+                        oracle_solver_param = oracle_solver_param
+                    )
+                    root_seq_type = BendersSeqInOut
+                    root_param = BendersSeqInOutParam(
+                        time_limit = 300.0,
+                        gap_tolerance = 1e-6,
+                        stabilizing_x = ones(data.dim_x),
+                        α = 0.9,
+                        λ = 0.1,
+                        verbose = false
+                    )
+                    root_preprocessing = RootNodePreprocessing(typical_oracle, root_seq_type, root_param)
+                    lazy_callback = LazyCallback(typical_oracle)
+                    user_callback = NoUserCallback()
+                    env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
+                    log = solve!(env)
+                    @test env.termination_status == Optimal()
+                    @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
+                end
+            end
 
             @testset "Disjunctive oracle" begin
 
@@ -123,7 +127,7 @@ user_cb_param = UserCallbackParam(frequency=1)
                 @testset "NoSeq" begin
                     @info "solving CFLP p$i - disjunctive oracle - no seq..."
                     data, master, disjunctive_oracle = auto_decompose(
-                        mip.model,
+                        model,
                         :disjunctive;
                         master_solver_param = master_solver_param,
                         oracle_param = oracle_param,
@@ -132,7 +136,7 @@ user_cb_param = UserCallbackParam(frequency=1)
                         dcglp_param = dcglp_param
                     )
                     _, _, lazy_oracle = auto_decompose(
-                        mip.model;
+                        model;
                         master_solver_param = master_solver_param,
                         oracle_solver_param = oracle_solver_param
                     )
@@ -147,7 +151,7 @@ user_cb_param = UserCallbackParam(frequency=1)
                 @testset "Seq" begin
                     @info "solving CFLP p$i - disjunctive oracle - seq..."
                     data, master, disjunctive_oracle = auto_decompose(
-                        mip.model,
+                        model,
                         :disjunctive;
                         master_solver_param = master_solver_param,
                         oracle_param = oracle_param,
@@ -156,7 +160,7 @@ user_cb_param = UserCallbackParam(frequency=1)
                         dcglp_param = dcglp_param
                     )
                     _, _, lazy_oracle = auto_decompose(
-                        mip.model;
+                        model;
                         master_solver_param = master_solver_param,
                         oracle_solver_param = oracle_solver_param
                     )
@@ -177,7 +181,7 @@ user_cb_param = UserCallbackParam(frequency=1)
                 @testset "SeqInOut" begin
                     @info "solving CFLP p$i - disjunctive oracle - seqinout..."
                     data, master, disjunctive_oracle = auto_decompose(
-                        mip.model,
+                        model,
                         :disjunctive;
                         master_solver_param = master_solver_param,
                         oracle_param = oracle_param,
@@ -186,7 +190,7 @@ user_cb_param = UserCallbackParam(frequency=1)
                         dcglp_param = dcglp_param
                     )
                     _, _, lazy_oracle = auto_decompose(
-                        mip.model;
+                        model;
                         master_solver_param = master_solver_param,
                         oracle_solver_param = oracle_solver_param
                     )

@@ -30,26 +30,28 @@ user_cb_param = UserCallbackParam(frequency=10)
             # Load problem data
             problem = read_uflp_benchmark_data("p$i")
 
-            # Create traditional data for MIP reference
-            dim_x = problem.n_facilities
-            dim_t = 1
-            c_x = problem.fixed_costs
-            c_t = [1.0]
-            data = Data(dim_x, dim_t, problem, c_x, c_t)
-
             # Solve MIP for reference
-            mip = Mip(data)
-            assign_attributes!(mip.model, mip_solver_param)
-            update_model!(mip, data)
-            optimize!(mip.model)
-            @assert termination_status(mip.model) == OPTIMAL
-            mip_opt_val = objective_value(mip.model)
+            model = Model()
+            set_optimizer_attribute(model, MOI.Silent(), true)
+            assign_attributes!(model, mip_solver_param)
+            N, M = problem.n_facilities, problem.n_customers
+            @variable(model, x[1:N], Bin)
+            @variable(model, y[1:N, 1:M] >= 0)
+            @objective(model, Min, 
+                sum(problem.costs[i,j] * problem.demands[j] * y[i,j] for i in 1:N, j in 1:M) + 
+                sum(problem.fixed_costs[i] * x[i] for i in 1:N)
+            )
+            @constraint(model, demand[j in 1:M], sum(y[:,j]) == 1)
+            @constraint(model, facility_open[i in 1:N, j in 1:M], y[i,j] <= x[i])
+            optimize!(model)
+            @assert termination_status(model) == OPTIMAL
+            mip_opt_val = objective_value(model)
 
             @testset "Classical oracle" begin
                 @testset "NoSeq" begin
                     @info "solving UFLP p$i - classical oracle - no seq..."
                     data, master, typical_oracle = auto_decompose(
-                        mip.model;
+                        model;
                         master_solver_param = master_solver_param,
                         oracle_solver_param = oracle_solver_param
                     )
@@ -64,7 +66,7 @@ user_cb_param = UserCallbackParam(frequency=10)
                 @testset "Seq" begin
                     @info "solving UFLP p$i - classical oracle - seq..."
                     data, master, typical_oracle = auto_decompose(
-                        mip.model;
+                        model;
                         master_solver_param = master_solver_param,
                         oracle_solver_param = oracle_solver_param
                     )
@@ -85,7 +87,7 @@ user_cb_param = UserCallbackParam(frequency=10)
                 @testset "SeqInOut" begin
                     @info "solving UFLP p$i - classical oracle - seqinout..."
                     data, master, typical_oracle = auto_decompose(
-                        mip.model;
+                        model;
                         master_solver_param = master_solver_param,
                         oracle_solver_param = oracle_solver_param
                     )
@@ -93,7 +95,7 @@ user_cb_param = UserCallbackParam(frequency=10)
                     root_param = BendersSeqInOutParam(
                         time_limit = 300.0,
                         gap_tolerance = 1e-6,
-                        stabilizing_x = ones(data.dim_x),
+                        stabilizing_x = ones(problem.n_facilities),
                         α = 0.9,
                         λ = 0.1,
                         verbose = false
@@ -124,7 +126,7 @@ user_cb_param = UserCallbackParam(frequency=10)
                 @testset "NoSeq" begin
                     @info "solving UFLP p$i - disjunctive oracle - no seq..."
                     data, master, disjunctive_oracle = auto_decompose(
-                        mip.model,
+                        model,
                         :disjunctive;
                         master_solver_param = master_solver_param,
                         oracle_param = oracle_param,
@@ -133,7 +135,7 @@ user_cb_param = UserCallbackParam(frequency=10)
                         dcglp_param = dcglp_param
                     )
                     _, _, lazy_oracle = auto_decompose(
-                        mip.model;
+                        model;
                         master_solver_param = master_solver_param,
                         oracle_solver_param = oracle_solver_param
                     )
@@ -148,7 +150,7 @@ user_cb_param = UserCallbackParam(frequency=10)
                 @testset "Seq" begin
                     @info "solving UFLP p$i - disjunctive oracle - seq..."
                     data, master, disjunctive_oracle = auto_decompose(
-                        mip.model,
+                        model,
                         :disjunctive;
                         master_solver_param = master_solver_param,
                         oracle_param = oracle_param,
@@ -157,7 +159,7 @@ user_cb_param = UserCallbackParam(frequency=10)
                         dcglp_param = dcglp_param
                     )
                     _, _, lazy_oracle = auto_decompose(
-                        mip.model;
+                        model;
                         master_solver_param = master_solver_param,
                         oracle_solver_param = oracle_solver_param
                     )
@@ -178,7 +180,7 @@ user_cb_param = UserCallbackParam(frequency=10)
                 @testset "SeqInOut" begin
                     @info "solving UFLP p$i - disjunctive oracle - seqinout..."
                     data, master, disjunctive_oracle = auto_decompose(
-                        mip.model,
+                        model,
                         :disjunctive;
                         master_solver_param = master_solver_param,
                         oracle_param = oracle_param,
@@ -187,7 +189,7 @@ user_cb_param = UserCallbackParam(frequency=10)
                         dcglp_param = dcglp_param
                     )
                     _, _, lazy_oracle = auto_decompose(
-                        mip.model;
+                        model;
                         master_solver_param = master_solver_param,
                         oracle_solver_param = oracle_solver_param
                     )
@@ -195,7 +197,7 @@ user_cb_param = UserCallbackParam(frequency=10)
                     root_param = BendersSeqInOutParam(
                         time_limit = 300.0,
                         gap_tolerance = 1e-6,
-                        stabilizing_x = ones(data.dim_x),
+                        stabilizing_x = ones(problem.n_facilities),
                         α = 0.9,
                         λ = 0.1,
                         verbose = false

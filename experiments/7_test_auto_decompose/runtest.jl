@@ -3,7 +3,6 @@ using Test
 using JuMP
 
 
-
 @testset "Auto Decompose Tests" begin
     @info "Running Auto Decompose Tests"
     include("ufl_seq.jl")

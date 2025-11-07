@@ -10,12 +10,6 @@ using JuMP
             # Load problem data
             problem = read_cflp_benchmark_data("p$i")
 
-            # Create traditional data for MIP reference
-            dim_x = problem.n_facilities
-            dim_t = 1
-            c_x = problem.fixed_costs
-            c_t = [1.0]
-            data = Data(dim_x, dim_t, problem, c_x, c_t)
 
             # Algorithm parameters
             benders_param = BendersSeqParam(
@@ -30,18 +24,29 @@ using JuMP
             oracle_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_EPOPT" => 1e-9)
 
             # Solve MIP for reference
-            mip = Mip(data)
-            assign_attributes!(mip.model, mip_solver_param)
-            update_model!(mip, data)
-            optimize!(mip.model)
-            @assert termination_status(mip.model) == OPTIMAL
-            mip_opt_val = objective_value(mip.model)
+            model = Model()
+            set_optimizer_attribute(model, MOI.Silent(), true)
+            assign_attributes!(model, mip_solver_param)
+            N, M = problem.n_facilities, problem.n_customers
+            @variable(model, x[1:N], Bin)
+            @variable(model, y[1:N, 1:M] >= 0)
+            @objective(model, Min, 
+                sum(problem.costs[i,j] * problem.demands[j] * y[i,j] for i in 1:N, j in 1:M) + 
+                sum(problem.fixed_costs[i] * x[i] for i in 1:N)
+            )
+            @constraint(model, demand[j in 1:M], sum(y[:,j]) == 1)
+            @constraint(model, facility_open[i in 1:N, j in 1:M], y[i,j] <= x[i])
+            @constraint(model, capacity[i in 1:N], sum(problem.demands[:] .* y[i,:]) <= problem.capacities[i] * x[i])
+            @constraint(model, sum(problem.capacities[i] * x[i] for i in 1:N) >= sum(problem.demands))
+            optimize!(model)
+            @assert termination_status(model) == OPTIMAL
+            mip_opt_val = objective_value(model)
 
             @testset "Classical oracle" begin
                 @info "solving CFLP p$i - auto_decompose - seq - classical"
 
                 data, master, oracle = auto_decompose(
-                    mip.model;
+                    model;
                     master_solver_param = master_solver_param,
                     oracle_solver_param = oracle_solver_param
                 )
@@ -77,7 +82,7 @@ using JuMP
                 dcglp_solver_param = Dict("solver" => "CPLEX", "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_EPOPT" => 1e-9)
 
                 data, master, oracle = auto_decompose(
-                    mip.model,
+                    model,
                     :disjunctive;
                     master_solver_param = master_solver_param,
                     oracle_param = oracle_param,
