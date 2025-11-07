@@ -313,6 +313,108 @@ using JuMP
             # Should throw ArgumentError
             @test_throws ArgumentError auto_decompose(model)
         end
+
+        @testset "SOCP constraint rejection" begin
+            # Create model with second-order cone constraint
+            model = Model()
+            @variable(model, x[1:2], Bin)
+            @variable(model, y[1:3] >= 0)
+            @objective(model, Min, sum(x) + sum(y))
+            @constraint(model, x[1] + y[1] >= 1)
+            @constraint(model, [y[1], y[2], y[3]] in SecondOrderCone())  # SOCP constraint
+
+            # Should throw ArgumentError with informative message
+            err = @test_throws ArgumentError auto_decompose(model)
+            @test occursin("second-order cone", err.value.msg) || occursin("SOCP", err.value.msg)
+            @test occursin("auto_decompose does not support", err.value.msg)
+        end
+
+        @testset "SDP constraint rejection" begin
+            # Create model with positive semidefinite constraint
+            model = Model()
+            @variable(model, x[1:2], Bin)
+            @variable(model, Y[1:2, 1:2])
+            @objective(model, Min, sum(x) + sum(Y))
+            @constraint(model, sum(x) >= 1)
+            @constraint(model, Y in PSDCone())  # SDP constraint
+
+            # Should throw ArgumentError with informative message
+            err = @test_throws ArgumentError auto_decompose(model)
+            @test occursin("semidefinite", err.value.msg) || occursin("SDP", err.value.msg) || occursin("PSD", err.value.msg)
+            @test occursin("auto_decompose does not support", err.value.msg)
+        end
+
+        @testset "SOS1 constraint rejection" begin
+            # Create model with SOS1 constraint
+            model = Model()
+            @variable(model, x[1:3], Bin)
+            @variable(model, y[1:3] >= 0)
+            @objective(model, Min, sum(x) + sum(y))
+            @constraint(model, sum(x) >= 1)
+            @constraint(model, y in SOS1())  # SOS1 constraint
+
+            # Should throw ArgumentError with informative message
+            err = @test_throws ArgumentError auto_decompose(model)
+            @test occursin("special ordered set", err.value.msg) || occursin("SOS", err.value.msg)
+            @test occursin("auto_decompose does not support", err.value.msg)
+        end
+
+        @testset "SOS2 constraint rejection" begin
+            # Create model with SOS2 constraint
+            model = Model()
+            @variable(model, x[1:2], Bin)
+            @variable(model, λ[1:5] >= 0)
+            @objective(model, Min, sum(x) + sum(λ))
+            @constraint(model, sum(x) >= 1)
+            @constraint(model, sum(λ) == 1)
+            @constraint(model, λ in SOS2())  # SOS2 constraint
+
+            # Should throw ArgumentError with informative message
+            err = @test_throws ArgumentError auto_decompose(model)
+            @test occursin("special ordered set", err.value.msg) || occursin("SOS", err.value.msg)
+            @test occursin("auto_decompose does not support", err.value.msg)
+        end
+
+        @testset "SOCP with affine expressions rejection" begin
+            # Create model with SOCP constraint containing affine expressions
+            model = Model()
+            @variable(model, x[1:2], Bin)
+            @variable(model, y[1:3] >= 0)
+            @objective(model, Min, sum(x) + sum(y))
+            @constraint(model, sum(x) >= 1)
+            @constraint(model, [x[1] + y[1], y[2], y[3]] in SecondOrderCone())  # SOCP with AffExpr
+
+            # Should throw ArgumentError with informative message
+            err = @test_throws ArgumentError auto_decompose(model)
+            @test occursin("second-order cone", err.value.msg) || occursin("SOCP", err.value.msg)
+            @test occursin("auto_decompose does not support", err.value.msg)
+        end
+
+        @testset "Quadratic objective rejection" begin
+            # Create model with quadratic objective
+            model = Model()
+            @variable(model, x[1:2], Bin)
+            @variable(model, y[1:2] >= 0)
+            @objective(model, Min, sum(x) + y[1]^2 + y[2]^2)  # Quadratic objective
+            @constraint(model, x[1] + y[1] >= 1)
+
+            # Should throw ArgumentError with informative message
+            err = @test_throws ArgumentError auto_decompose(model)
+            @test occursin("Quadratic", err.value.msg)
+        end
+
+        @testset "Nonlinear objective rejection" begin
+            # Create model with nonlinear objective
+            model = Model()
+            @variable(model, x[1:2], Bin)
+            @variable(model, y[1:2] >= 0)
+            @objective(model, Min, sum(x) + y[1] * y[2])  # Nonlinear objective
+            @constraint(model, x[1] + y[1] >= 1)
+
+            # Should throw ArgumentError with informative message
+            err = @test_throws ArgumentError auto_decompose(model)
+            @test occursin("nonlinear", err.value.msg) || occursin("Quadratic", err.value.msg)
+        end
     end
 
 end

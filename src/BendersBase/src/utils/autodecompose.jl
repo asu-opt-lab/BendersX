@@ -69,6 +69,43 @@ function partition_constraints_for_benders(model::Model, master_vars::Vector{Var
     oracle_constraints = ConstraintRef[]
     coupling_constraints = ConstraintRef[]
 
+    # Check for unsupported variable-in-set constraints
+    unsupported_constraint_types = String[]
+    for (F, S) in list_of_constraint_types(model)
+        if F == Vector{VariableRef} || F == Vector{AffExpr}
+            set_name = string(S)
+            if occursin("SecondOrderCone", set_name)
+                push!(unsupported_constraint_types, "second-order cone constraints (SOCP)")
+            elseif occursin("RotatedSecondOrderCone", set_name)
+                push!(unsupported_constraint_types, "rotated second-order cone constraints")
+            elseif occursin("PositiveSemidefinite", set_name)
+                push!(unsupported_constraint_types, "semidefinite constraints (SDP/PSD)")
+            elseif occursin("SOS1", set_name)
+                push!(unsupported_constraint_types, "special ordered set type 1 constraints (SOS1)")
+            elseif occursin("SOS2", set_name)
+                push!(unsupported_constraint_types, "special ordered set type 2 constraints (SOS2)")
+            elseif occursin("ExponentialCone", set_name)
+                push!(unsupported_constraint_types, "exponential cone constraints")
+            elseif occursin("PowerCone", set_name)
+                push!(unsupported_constraint_types, "power cone constraints")
+            else
+                # Generic vector constraint
+                push!(unsupported_constraint_types, "vector/conic constraints ($set_name)")
+            end
+        elseif F == QuadExpr
+            push!(unsupported_constraint_types, "quadratic constraints")
+        elseif F == NonlinearExpr
+            push!(unsupported_constraint_types, "nonlinear constraints")
+        end
+    end
+
+    if !isempty(unsupported_constraint_types)
+        unique_types = unique(unsupported_constraint_types)
+        throw(ArgumentError("auto_decompose does not support the following constraint types found in the model: " *
+                          join(unique_types, ", ") * ". " *
+                          "Only linear constraints (affine expressions) are supported."))
+    end
+
     # Get all constraints
     model_constraints = all_constraints(model, include_variable_in_set_constraints=false)
 
@@ -252,9 +289,14 @@ function constraint_variables(constraint::ConstraintRef)
     elseif isa(func, VariableRef)
         return [func]
     else
-        throw(ArgumentError("Unsupported constraint type in auto_decompose: $(typeof(func)). " *
-                          "Only linear expressions (AffExpr) and variable references (VariableRef) are supported. " *
-                          "Quadratic, nonlinear, and vector constraints are not supported."))
+        throw(ArgumentError("Unsupported constraint function type in auto_decompose: $(typeof(func)). " *
+                          "Only linear constraints are supported. " *
+                          "The following constraint types are NOT supported: " *
+                          "quadratic constraints, nonlinear constraints, " *
+                          "second-order cone constraints (SOCP), " *
+                          "semidefinite constraints (SDP/PSD), " *
+                          "special ordered set constraints (SOS1/SOS2), " *
+                          "and other conic/vector constraints."))
     end
 end
 
