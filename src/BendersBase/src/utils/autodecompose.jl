@@ -129,6 +129,9 @@ function decompose_objective_for_benders(model::Model, master_vars::Vector{Varia
         elseif obj in oracle_vars_set
             add_to_expression!(oracle_terms, 1.0, obj)
         end
+    else
+        throw(ArgumentError("Unsupported objective function type in auto_decompose: $(typeof(obj)). " *
+                          "Only linear objectives (AffExpr) and single variable objectives (VariableRef) are supported."))
     end
 
     return master_terms, oracle_terms
@@ -210,6 +213,7 @@ function substitute_variables_in_expression(expr, var_map::Dict{VariableRef, Var
             if haskey(var_map, var)
                 add_to_expression!(new_expr, coeff, var_map[var])
             else
+                @warn "Variable not found in mapping, using original variable" variable=name(var) var_object=var
                 add_to_expression!(new_expr, coeff, var)
             end
         end
@@ -217,7 +221,8 @@ function substitute_variables_in_expression(expr, var_map::Dict{VariableRef, Var
     elseif isa(expr, VariableRef)
         return haskey(var_map, expr) ? var_map[expr] : expr
     else
-        return expr
+        throw(ArgumentError("Unsupported expression type in auto_decompose: $(typeof(expr)). " *
+                          "Only linear expressions (AffExpr) and variable references (VariableRef) are supported."))
     end
 end
 
@@ -247,7 +252,9 @@ function constraint_variables(constraint::ConstraintRef)
     elseif isa(func, VariableRef)
         return [func]
     else
-        return VariableRef[]
+        throw(ArgumentError("Unsupported constraint type in auto_decompose: $(typeof(func)). " *
+                          "Only linear expressions (AffExpr) and variable references (VariableRef) are supported. " *
+                          "Quadratic, nonlinear, and vector constraints are not supported."))
     end
 end
 
@@ -357,6 +364,11 @@ end
 
 Automatically decompose a JuMP model into Data, Master, and ClassicalOracle components.
 
+# Limitations
+- Only supports linear (affine) objective functions. Quadratic and nonlinear objectives are not supported.
+- Only supports linear constraints. Quadratic, nonlinear, and vector constraints are not supported.
+- The model must be decomposable with clear first-stage (binary/integer) and second-stage (continuous) variable structure.
+
 # Arguments
 - `model::Model`: The JuMP model to decompose
 - `decision_vars::Vector{Symbol}`: List of variable names to be treated as master variables (default: empty, uses automatic classification)
@@ -392,13 +404,13 @@ function auto_decompose(model::Model;
 
     # Check for empty model
     if num_variables(model) == 0
-        throw(ArgumentError("Cannot decompose empty model with no variables"))
+        throw(ArgumentError("Cannot decompose empty model with no variables in auto_decompose."))
     end
 
     # Check for unsupported objective types
     obj = objective_function(model)
     if isa(obj, QuadExpr) || isa(obj, NonlinearExpr)
-        throw(ArgumentError("Quadratic and nonlinear objectives are not supported"))
+        throw(ArgumentError("Quadratic and nonlinear objectives are not supported in auto_decompose."))
     end
 
     # Step 1: Classify variables
