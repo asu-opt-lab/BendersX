@@ -247,16 +247,11 @@ function substitute_variables_in_expression(expr, var_map::Dict{VariableRef, Var
     if isa(expr, AffExpr)
         new_expr = AffExpr(expr.constant)
         for (var, coeff) in expr.terms
-            if haskey(var_map, var)
-                add_to_expression!(new_expr, coeff, var_map[var])
-            else
-                @warn "Variable not found in mapping, using original variable" variable=name(var) var_object=var
-                add_to_expression!(new_expr, coeff, var)
-            end
+            add_to_expression!(new_expr, coeff, var_map[var])
         end
         return new_expr
     elseif isa(expr, VariableRef)
-        return haskey(var_map, expr) ? var_map[expr] : expr
+        return var_map[expr]
     else
         throw(ArgumentError("Unsupported expression type in auto_decompose: $(typeof(expr)). " *
                           "Only linear expressions (AffExpr) and variable references (VariableRef) are supported."))
