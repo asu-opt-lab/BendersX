@@ -15,6 +15,11 @@ mutable struct Master <: AbstractMaster
     x::Vector{VariableRef}
     t::Vector{VariableRef}
 
+    # Constructor for auto decomposition
+    function Master(model::Model, x::Vector{VariableRef}, t::Vector{VariableRef})
+        new(model, x, t)
+    end
+    
     function Master(data::Data; solver_param::Dict{String,Any} = Dict("solver" => "CPLEX", "CPX_PARAM_EPINT" => 1e-9, "CPX_PARAM_EPRHS" => 1e-9))
 
         @debug "Building Master Problem for CFLP"

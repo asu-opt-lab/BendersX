@@ -11,14 +11,14 @@ using DataFrames
 
 # Include source files
 include("types.jl")
+include("modules/modules.jl")
 include("utils/utils.jl")
-include("modules/modules.jl") 
 include("algorithms/algorithms.jl")
 
 
 # Export abstract types
 export AbstractBendersDecomposition
-export Data, AbstractData
+export Data, AbstractData, AutoDecomposedData
 export AbstractMaster, AbstractMip
 export AbstractOracle, AbstractOracleParam, AbstractTypicalOracle, BasicOracleParam
 export AbstractBendersSeq, AbstractBendersCallback

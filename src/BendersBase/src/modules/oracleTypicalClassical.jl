@@ -7,6 +7,11 @@ mutable struct ClassicalOracle <: AbstractTypicalOracle
     model::Model
     fixed_x_constraints::Vector{ConstraintRef}
 
+    # Constructor for auto decomposition
+    function ClassicalOracle(oracle_param::BasicOracleParam, model::Model, fixed_x_constraints::Vector{ConstraintRef})
+        new(oracle_param, model, fixed_x_constraints)
+    end
+
     function ClassicalOracle(data::Data; 
                              scen_idx::Int=-1, 
                              solver_param::Dict{String,Any} = Dict("solver" => "CPLEX", "CPX_PARAM_EPRHS" => 1e-9, "CPX_PARAM_NUMERICALEMPHASIS" => 1, "CPX_PARAM_EPOPT" => 1e-9),

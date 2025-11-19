@@ -24,6 +24,13 @@ struct Data{T<:AbstractData}
     c_t::Vector{Float64}
 end
 
+"""
+Empty data structure for automatically decomposed problems.
+Represents the concept of "no data".
+"""
+struct AutoDecomposedData <: AbstractData
+end
+
 abstract type AbstractBendersSeq <: AbstractBendersDecomposition end
 abstract type AbstractBendersCallback <: AbstractBendersDecomposition end
 
