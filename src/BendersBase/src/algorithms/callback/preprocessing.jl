@@ -43,9 +43,21 @@ mutable struct RootNodePreprocessing <: AbstractRootNodePreprocessing
 end
 
 """
+    root_node_processing!(data::Data, master::AbstractMaster, root_preprocessing::NoRootNodePreprocessing) -> Float64
+
+No-op implementation for NoRootNodePreprocessing.
+
+# Returns
+- `Float64`: 0.0 (no time spent)
+"""
+function root_node_processing!(data::Data, master::AbstractMaster, root_preprocessing::NoRootNodePreprocessing)
+    return 0.0
+end
+
+"""
     root_node_processing!(data::Data, master::AbstractMaster, root_preprocessing::RootNodePreprocessing)
 
-Process the root node of the branch-and-bound tree by temporarily relaxing integrality 
+Process the root node of the branch-and-bound tree by temporarily relaxing integrality
 constraints and generating initial Benders cuts.
 
 # Arguments
@@ -60,13 +72,13 @@ function root_node_processing!(data::Data, master::AbstractMaster, root_preproce
     root_param = deepcopy(root_preprocessing.params)
 
     undo = relax_integrality(master.model)
-    
+
     root_node_time = @elapsed begin
         BendersRootSeq = root_preprocessing.seq_type(data, master, root_preprocessing.oracle; param=root_param)
         solve!(BendersRootSeq)
     end
-    
+
     undo()
-    
+
     return root_node_time
 end

@@ -22,6 +22,7 @@ export Data, AbstractData
 export AbstractMaster, AbstractMip
 export AbstractOracle, AbstractOracleParam, AbstractTypicalOracle, BasicOracleParam
 export AbstractBendersSeq, AbstractBendersCallback
+export AbstractRootNodePreprocessing
 export Seq, SeqInOut
 export TerminationStatus, NotSolved, TimeLimit, Optimal, InfeasibleOrNumericalIssue
 export TimeLimitException, UnexpectedModelStatusException, UndefError, AlgorithmException

@@ -80,20 +80,7 @@ function solve!(env::BendersBnB)
     log.start_time = time()
     
     # Apply root node preprocessing if specified
-    root_node_time = 0.0
-    if isa(env.root_preprocessing, RootNodePreprocessing)
-        root_node_time = root_node_processing!(env.data, env.master, env.root_preprocessing)
-    end
-    
-    # Apply disjunctive root node preprocessing if specified
-    if param.disjunctive_root_process
-        # Update root_preprocessing params
-        env.root_preprocessing.params.time_limit -= root_node_time
-        env.root_preprocessing.oracle = env.user_callback.oracle
-
-        disjunctive_root_node_time = root_node_processing!(env.data, env.master, env.root_preprocessing)
-        root_node_time += disjunctive_root_node_time
-    end
+    root_node_time = root_node_processing!(env.data, env.master, env.root_preprocessing)
     
     # Set up lazy callback
     function lazy_callback_wrapper(cb_data)
@@ -144,10 +131,10 @@ function solve!(env::BendersBnB)
         @info "Objective value: $(env.obj_value)"
         @info "Relative gap: $(JuMP.relative_gap(env.master.model))"
         @info "Lazy cuts added: $(log.n_lazy_cuts)"
-        if typeof(env.user_callback.oracle) <: AbstractDisjunctiveOracle
-            @info "Disjunctive cuts added: $(length(env.user_callback.oracle.disjunctiveCuts))"
-            env.user_callback.oracle.oracle_param.add_benders_cuts_to_master != 0 && @info "Byproduct Benders cuts added: $(log.n_user_cuts - length(env.user_callback.oracle.disjunctiveCuts))"
-        end
+        # if typeof(env.user_callback.oracle) <: AbstractDisjunctiveOracle
+        #     @info "Disjunctive cuts added: $(length(env.user_callback.oracle.disjunctiveCuts))"
+        #     env.user_callback.oracle.oracle_param.add_benders_cuts_to_master != 0 && @info "Byproduct Benders cuts added: $(log.n_user_cuts - length(env.user_callback.oracle.disjunctiveCuts))"
+        # end
     end
     
     return deepcopy(env.obj_value), elapsed_time
