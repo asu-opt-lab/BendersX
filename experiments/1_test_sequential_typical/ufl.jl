@@ -54,6 +54,21 @@ using JuMP
                 @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
             end
 
+            @testset "Unified oracle" begin
+                @info "solving UFLP p$i - unified oracle - seq..."
+                master = Master(data; solver_param = master_solver_param)
+                update_model!(master, data)
+
+                oracle = UnifiedOracle(data; solver_param = typical_oracle_solver_param)
+                update_model!(oracle, data)
+                model_reformulation!(oracle)
+
+                env = BendersSeq(data, master, oracle; param = benders_param)
+                log = solve!(env)
+                @test env.termination_status == Optimal()
+                @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
+            end
+
             # Initialize data object
             dim_x = problem.n_facilities
             c_x = problem.fixed_costs
