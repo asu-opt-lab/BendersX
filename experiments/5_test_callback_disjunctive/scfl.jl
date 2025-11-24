@@ -133,6 +133,91 @@ using JuMP
                 end
             end
 
+            @testset "Unified oracle" begin
+                lazy_oracle = SeparableOracle(data, UnifiedOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param)
+                for j=1:lazy_oracle.N
+                    update_model!(lazy_oracle.oracles[j], data, j)
+                    model_reformulation!(lazy_oracle.oracles[j])
+                end
+
+                typical_oracle_kappa = SeparableOracle(data, UnifiedOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param)
+                typical_oracle_nu = SeparableOracle(data, UnifiedOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param)
+                for j=1:typical_oracle_kappa.N
+                    update_model!(typical_oracle_kappa.oracles[j], data, j)
+                    model_reformulation!(typical_oracle_kappa.oracles[j])
+                end
+                for j=1:typical_oracle_nu.N
+                    update_model!(typical_oracle_nu.oracles[j], data, j)
+                    model_reformulation!(typical_oracle_nu.oracles[j])
+                end
+                typical_oracles = [typical_oracle_kappa; typical_oracle_nu]
+            
+                # for strengthened in [true; false], add_benders_cuts_to_master in [true; false; 2], reuse_dcglp in [true; false], p in [1.0; Inf], lift in [true; false], disjunctive_cut_append_rule in [NoDisjunctiveCuts(); AllDisjunctiveCuts(); DisjunctiveCutsSmallerIndices()], adjust_t_to_fx in [true; false]
+                for strengthened in [true], add_benders_cuts_to_master in [true], reuse_dcglp in [true], p in [1.0], lift in [true], disjunctive_cut_append_rule in [AllDisjunctiveCuts()]
+                    @testset "strgthnd $strengthened; benders2master $add_benders_cuts_to_master; reuse $reuse_dcglp; p $p; lift $lift; dcut_append $disjunctive_cut_append_rule" begin
+                        
+                        disjunctive_oracle = DisjunctiveOracle(data, typical_oracles; 
+                                                                solver_param = dcglp_solver_param,
+                                                                param = dcglp_param) 
+                        oracle_param = DisjunctiveOracleParam(norm = LpNorm(p), 
+                                                                split_index_selection_rule = RandomFractional(),
+                                                                disjunctive_cut_append_rule = disjunctive_cut_append_rule, 
+                                                                strengthened = strengthened, 
+                                                                add_benders_cuts_to_master = add_benders_cuts_to_master, 
+                                                                fraction_of_benders_cuts_to_master = 0.5, 
+                                                                reuse_dcglp = reuse_dcglp,
+                                                                lift = lift)
+                        set_parameter!(disjunctive_oracle, oracle_param)
+                        update_model!(disjunctive_oracle, data)
+                        
+                        @testset "NoSeq" begin
+                            @info "solving SCFLP f25-c50-s64-r10-$i - disjunctive oracle/unified/no seq - strgthnd $strengthened; benders2master $add_benders_cuts_to_master reuse $reuse_dcglp lift $lift p $p dcut_append $disjunctive_cut_append_rule"
+                            master = Master(data; solver_param = master_solver_param)
+                            update_model!(master, data)
+
+                            root_preprocessing = NoRootNodePreprocessing()
+                            lazy_callback = LazyCallback(lazy_oracle)
+                            user_callback = UserCallback(disjunctive_oracle; params=user_cb_param)
+                            
+                            env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
+                            log = solve!(env)
+                            @test env.termination_status == Optimal()
+                            @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
+                        end
+
+                        @testset "Seq" begin
+                            @info "solving SCFLP f25-c50-s64-r10-$i - disjunctive oracle/unified/seq - strgthnd $strengthened; benders2master $add_benders_cuts_to_master reuse $reuse_dcglp lift $lift p $p dcut_append $disjunctive_cut_append_rule"
+                            master = Master(data; solver_param = master_solver_param)
+                            update_model!(master, data)
+
+                            root_preprocessing = RootNodePreprocessing(lazy_oracle, BendersSeq, BendersSeqParam(;time_limit=200.0, gap_tolerance=1e-9, verbose=false))
+                            lazy_callback = LazyCallback(lazy_oracle)
+                            user_callback = UserCallback(disjunctive_oracle; params=user_cb_param)
+                            
+                            env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
+                            log = solve!(env)
+                            @test env.termination_status == Optimal()
+                            @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
+                        end
+
+                        @testset "SeqInOut" begin
+                            @info "solving SCFLP f25-c50-s64-r10-$i - disjunctive oracle/unified/seqinout - strgthnd $strengthened; benders2master $add_benders_cuts_to_master reuse $reuse_dcglp lift $lift p $p dcut_append $disjunctive_cut_append_rule"
+                            master = Master(data; solver_param = master_solver_param)
+                            update_model!(master, data)
+
+                            root_preprocessing = RootNodePreprocessing(lazy_oracle, BendersSeqInOut, BendersSeqInOutParam(time_limit = 300.0, gap_tolerance = 1e-9, stabilizing_x = ones(data.dim_x), α = 0.9, λ = 0.1, verbose = false))
+                            lazy_callback = LazyCallback(lazy_oracle)
+                            user_callback = UserCallback(disjunctive_oracle; params=user_cb_param)
+                            
+                            env = BendersBnB(data, master, root_preprocessing, lazy_callback, user_callback; param = benders_param)
+                            log = solve!(env)
+                            @test env.termination_status == Optimal()
+                            @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
+                        end
+                    end
+                end
+            end
+
             @testset "CFLKnapsack oracle" begin
                 lazy_oracle = SeparableOracle(data, CFLKnapsackOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param)
                 for j=1:lazy_oracle.N

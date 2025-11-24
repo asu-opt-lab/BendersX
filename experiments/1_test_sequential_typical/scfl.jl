@@ -55,6 +55,23 @@ using JuMP
                 @test env.termination_status == Optimal()
                 @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
             end 
+
+            @testset "Unified oracle" begin
+                @info "solving SCFLP f25-c50-s64-r10-$i - unified oracle - seq..."
+                master = Master(data; solver_param = master_solver_param)
+                update_model!(master, data)
+
+                oracle = SeparableOracle(data, UnifiedOracle(), data.problem.n_scenarios; solver_param = typical_oracle_solver_param)
+                for j=1:oracle.N
+                    update_model!(oracle.oracles[j], data, j)
+                    model_reformulation!(oracle.oracles[j])
+                end
+
+                env = BendersSeq(data, master, oracle; param = benders_param)
+                log = solve!(env)
+                @test env.termination_status == Optimal()
+                @test isapprox(mip_opt_val, env.obj_value, atol=1e-5)
+            end
             
             @testset "Knapsack oracle" begin
                 @info "solving SCFLP f25-c50-s64-r10-$i - knapsack oracle - seq..."
